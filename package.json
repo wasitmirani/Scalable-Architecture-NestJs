@@ -1,5 +1,6 @@
 {
   "name": "backoffice-app",
+  "description": "A NestJS backoffice application with modular structure.",
   "version": "0.0.1",
   "description": "",
   "author": "",

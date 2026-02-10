@@ -4,7 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  BeforeInsert 
+  BeforeInsert
 } from 'typeorm';
 
 import * as bcrypt from 'bcrypt';
@@ -43,7 +43,7 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true, name: 'user_name' })
   userName?: string | null;
 
- 
+
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   slug?: string | null;
@@ -75,21 +75,19 @@ export class User {
    * otherwise fallback to simple === comparison for plain text.
    */
   async comparePassword(password: string): Promise<boolean> {
-    // If hash looks like Laravel's bcrypt (starts with $2y$), use bcrypt compare.
-      if (typeof this.password === 'string' && this.password.startsWith('$2y$')) {
-        // bcryptjs expects $2a$ prefix, so replace $2y$ with $2a$
-        const laravelHash = this.password.replace(/^\$2y\$/, '$2a$');
-        return await bcrypt.compare(password, laravelHash);
-      }
-      // If not hashed (plain), do normal comparison
-      return password === this.password;
+    if (typeof this.password === 'string' && this.password.startsWith('$2y$')) {
+      // bcryptjs expects $2a$ prefix, so replace $2y$ with $2a$
+      const laravelHash = this.password.replace(/^\$2y\$/, '$2a$');
+      return await bcrypt.compare(password, laravelHash);
+    }
+    return password === this.password;
   }
 
 }
 
-export const USER_PUBLIC_COLUMNS = [
+export const USER_PUBLIC_COLUMNS: (keyof User)[] = [
   'id',
   'name',
   'email',
   'createdAt',
-] as const;
+];

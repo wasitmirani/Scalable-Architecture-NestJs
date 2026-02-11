@@ -3,12 +3,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
-
+import { AdvancedFileLogger } from './services/logger.service';
 
 
 async function bootstrap() {
   dotenv.config();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new AdvancedFileLogger(), // Enable all log levels
+  });
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,

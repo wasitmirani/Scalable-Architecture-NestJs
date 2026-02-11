@@ -66,7 +66,7 @@ export class AdvancedFileLogger implements LoggerService {
         } else if (type === 'debug') {
             filePath = path.join(this.logDir, 'debug', `debug-${currentDate}.log`);
             stream = fs.createWriteStream(filePath, { flags: 'a' });
-        }else if (type === 'warn') {
+        } else if (type === 'warn') {
             filePath = path.join(this.logDir, 'warn', `warn-${currentDate}.log`);
             stream = fs.createWriteStream(filePath, { flags: 'a' });
         }
@@ -120,6 +120,26 @@ export class AdvancedFileLogger implements LoggerService {
         if (typeof message === 'object') {
             return JSON.stringify(message, null, 2);
         }
-        return String(message);
+
+        const APP_TIMEZONE = APP_CONSTANTS.APP_TMEZONE;
+        const date = new Date();
+        const options: Intl.DateTimeFormatOptions = {
+            timeZone: APP_TIMEZONE,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        };
+
+        try {
+            const timestamp = date.toLocaleString('en-US', options);
+            return String(message) + " | Timestamp: " + timestamp + " " + APP_TIMEZONE;
+        } catch (error) {
+            // Fallback to UTC if invalid timezone
+            return String(message) + " | Timestamp: " + date.toISOString() + APP_TIMEZONE;
+        }
     }
 }

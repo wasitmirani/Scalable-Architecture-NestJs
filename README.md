@@ -12,6 +12,7 @@ A robust and scalable backoffice application built with [NestJS](https://nestjs.
   - Unified response format via `ResponseInterceptor`.
   - Automatic validation using `ValidationPipe`.
 - **Security**: CORS enabled and configurable via environment variables.
+- **Logging**: Advanced file logging with daily rotation, level segregation (error, warn, info, debug), and configurable timezone support.
 
 ## 🛠️ Tech Stack
 
@@ -30,12 +31,12 @@ The verified modules in this project include:
 
 ## ⚙️ Configuration
 
-The application requires environment variables for configuration. A sample configuration is provided in `.env.example`.
+The application requires environment variables for configuration. A sample configuration is provided in `.example.env`.
 
 Copy the example file to `.env`:
 
 ```bash
-cp .env.example .env
+cp .example.env .env
 ```
 
 Ensure you update the following key variables in `.env`:
@@ -43,6 +44,8 @@ Ensure you update the following key variables in `.env`:
 - `MONGO_URI`: Your MongoDB connection string.
 - `JWT_SECRET`: A strong secret key for token signing.
 - `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS (default: `http://localhost:3000`).
+- `APP_TIMEZONE`: Timezone for log timestamps (e.g., `Asia/Karachi`).
+- `LOG_DIR`: Directory for storing log files (default: `storage/logs`).
 
 ## 📦 Installation
 

@@ -1,6 +1,4 @@
 
-
-console.log("APP_TIMEZONE=", process.env.APP_TIMEZONE);
 export const APP_CONSTANTS = {
     DEFAULT_PAGE_LIMIT: 20,
     MAX_PAGE_LIMIT: 100,

@@ -7,7 +7,7 @@ dotenv.config();
 
 
 export const DatabaseConnection = TypeOrmModule.forRoot({
-  type: 'mysql',
+  type: process.env.DB_DRIVER as any || 'mysql',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306', 10),
   username: process.env.DB_USER || 'root',

@@ -5,4 +5,8 @@ export class AppService {
   healthCheck(): string {
     return 'Welcome to NestApp Service';
   }
+
+  appInfo(): string {
+    return "NestApp Service";
+  }
 }

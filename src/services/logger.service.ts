@@ -91,7 +91,9 @@ export class AdvancedFileLogger implements LoggerService {
     }
 
     log(message: any, context?: string) {
-        this.writeToLog('INFO', this.formatMessage(message), context, 'info');
+        const formatted = this.formatMessage(message);
+        this.writeToLog('INFO', formatted, context, 'info');
+        console.log(context ? `[${context}] ${formatted}` : formatted);
     }
 
     error(message: any, trace?: string, context?: string) {
@@ -102,10 +104,13 @@ export class AdvancedFileLogger implements LoggerService {
         // Write to both daily log and error log
         this.writeToLog('ERROR', errorMessage, context);
         this.writeToLog('ERROR', errorMessage, context, 'error');
+        console.error(context ? `[${context}] ${errorMessage}` : errorMessage);
     }
 
     warn(message: any, context?: string) {
-        this.writeToLog('WARNING', this.formatMessage(message), context, 'warn');
+        const formatted = this.formatMessage(message);
+        this.writeToLog('WARNING', formatted, context, 'warn');
+        console.warn(context ? `[${context}] ${formatted}` : formatted);
     }
 
     debug(message: any, context?: string) {

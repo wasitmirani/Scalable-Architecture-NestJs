@@ -135,9 +135,24 @@ export class AuthService {
       if (error instanceof BusinessException) {
         throw error;
       }
-      
+
       console.error('Login error:', error);
-      throw new BusinessException('Login failed', 'LOGIN_ERROR');
+
+      // Surface missing-table / DB connectivity issues clearly
+      const sqlMessage = error?.driverError?.sqlMessage || error?.message;
+      if (sqlMessage?.includes("doesn't exist") || error?.code === 'ER_NO_SUCH_TABLE') {
+        throw new BusinessException(
+          'Database table missing. Ensure the users table exists (run schema or enable synchronize).',
+          'DB_TABLE_MISSING',
+        );
+      }
+
+      throw new BusinessException(
+        process.env.NODE_ENV === 'production'
+          ? 'Login failed'
+          : `Login failed: ${sqlMessage || 'unexpected error'}`,
+        'LOGIN_ERROR',
+      );
     }
   }
 

@@ -121,6 +121,9 @@ Protected routes (for example `GET /api/users`) expect:
 Authorization: Bearer <access_token>
 ```
 
+In Postman: Authorization → Type **Bearer Token** → paste **only** the JWT (do not include the word `Bearer` again).  
+After restarting the server, **login again** — old tokens from before the JWT secret fix will be rejected.
+
 | Header value | Error |
 |---|---|
 | Missing | `Authorization header missing` (401) |

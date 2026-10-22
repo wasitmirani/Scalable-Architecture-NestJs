@@ -16,7 +16,7 @@ import { AuthMiddleware } from 'src/middleware/auth/auth.middleware';
   controllers: [UsersController],
 
   // Services available inside this module
-  providers: [UsersService, AdvancedFileLogger],
+  providers: [UsersService, AdvancedFileLogger, AuthMiddleware],
 
   // Export services if other modules need them
   exports: [UsersService, TypeOrmModule],

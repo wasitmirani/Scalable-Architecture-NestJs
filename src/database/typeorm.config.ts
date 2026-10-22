@@ -3,16 +3,16 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const raw = (process.env.DB_DRIVER || 'mysql').toLowerCase();
-const type = (
-  ['postgres', 'postgresql', 'pgsql'].includes(raw)
-    ? 'postgres'
-    : raw === 'mariadb'
-      ? 'mariadb'
-      : 'mysql'
-) as DataSourceOptions['type'];
+type DbDriver = 'mysql' | 'mariadb' | 'postgres';
 
-export const dbOptions: DataSourceOptions = {
+const raw = (process.env.DB_DRIVER || 'mysql').toLowerCase();
+const type: DbDriver = ['postgres', 'postgresql', 'pgsql'].includes(raw)
+  ? 'postgres'
+  : raw === 'mariadb'
+    ? 'mariadb'
+    : 'mysql';
+
+export const dbOptions = {
   type,
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT) || (type === 'postgres' ? 5432 : 3306),
@@ -22,5 +22,5 @@ export const dbOptions: DataSourceOptions = {
   synchronize:
     process.env.DB_SYNCHRONIZE === 'true' ||
     process.env.NODE_ENV !== 'production',
-  logging: process.env.DB_LOGGING !== 'false',
-};
+   logging: process.env.DB_LOGGING !== 'false',
+} as DataSourceOptions;

@@ -106,14 +106,93 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
-After starting the application, the API will be available at `http://localhost:3000/api`.
-You can check the health status at `http://localhost:3000/api/health-check` or `http://localhost:3000/api/`.
+After starting the application, the API will be available at `http://localhost:{PORT}/api` (default `3000`; this project often uses `8888` via `.env`).
+You can check the health status at `/api/health-check` or `/api/`.
 
-Login with the seeded admin:
+## 📡 API calls
+
+Base URL: `http://localhost:8888/api` (or your `PORT`).
+
+### Auth header (required for protected routes)
+
+Protected routes (for example `GET /api/users`) expect:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+| Header value | Error |
+|---|---|
+| Missing | `Authorization header missing` (401) |
+| Token without `Bearer ` prefix, or empty after `Bearer` | `Token missing` (401) |
+| Invalid / expired JWT | `Invalid or expired token` (401) |
+
+### 1. Login (public)
+
 ```http
 POST /api/auth/login
-{ "email": "admin@example.com", "password": "Password123!" }
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Password123!"
+}
 ```
+
+Response includes `access_token` and `refresh_token`. Copy `access_token` for later requests.
+
+### 2. Register (public)
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "password": "Password123!"
+}
+```
+
+### 3. Users (protected — Bearer required)
+
+```http
+GET /api/users?page=1&limit=10
+Authorization: Bearer <access_token>
+```
+
+```http
+GET /api/users/:id
+Authorization: Bearer <access_token>
+```
+
+### 4. Other auth endpoints
+
+| Method | Path | Auth |
+|--------|------|------|
+| `POST` | `/api/auth/refresh-token` | Body: `{ "refresh_token": "..." }` |
+| `GET` | `/api/auth/profile` | Bearer |
+| `POST` | `/api/auth/logout` | Bearer |
+
+### curl examples
+
+```bash
+# Login
+curl -s -X POST http://localhost:8888/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"admin@example.com\",\"password\":\"Password123!\"}"
+
+# Users list (replace TOKEN)
+curl -s http://localhost:8888/api/users \
+  -H "Authorization: Bearer TOKEN"
+```
+
+### Postman / Insomnia
+
+1. Call `POST /api/auth/login` and copy `access_token` from the response.
+2. For protected requests: **Authorization → Bearer Token** and paste the token  
+   (or set header `Authorization` to `Bearer <access_token>` manually).
+3. Do **not** paste only the raw JWT without the `Bearer ` prefix.
 
 ## 🧪 Testing
 

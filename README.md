@@ -6,7 +6,7 @@ A robust and scalable backoffice application built with [NestJS](https://nestjs.
 
 - **Authentication Module**: Secure JWT-based authentication with refresh token strategies.
 - **Microservices Ready**: Modular architecture prepared for scaling.
-- **Database Support**: Configured for both SQL (MySQL) and NoSQL (MongoDB) data persistence.
+- **Database Support**: MySQL, MariaDB, or PostgreSQL (via `DB_DRIVER`), plus optional MongoDB.
 - **Standardized API**:
   - Global prefix: `/api`
   - Unified response format via `ResponseInterceptor`.
@@ -18,7 +18,7 @@ A robust and scalable backoffice application built with [NestJS](https://nestjs.
 
 - **Framework**: NestJS (Node.js)
 - **Language**: TypeScript
-- **Databases**: MySQL, MongoDB
+- **Databases**: MySQL / MariaDB / PostgreSQL, MongoDB
 - **Testing**: Jest
 
 ## 📂 Project Structure
@@ -40,46 +40,92 @@ cp .example.env .env
 ```
 
 Ensure you update the following key variables in `.env`:
-- `DB_HOST`, `DB_USER`, `DB_PASS`: Your database credentials.
-- `MONGO_URI`: Your MongoDB connection string.
-- `JWT_SECRET`: A strong secret key for token signing.
-- `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS (default: `http://localhost:3000`).
-- `APP_TIMEZONE`: Timezone for log timestamps (e.g., `Asia/Karachi`).
-- `LOG_DIR`: Directory for storing log files (default: `storage/logs`).
+- `DB_DRIVER`: `mysql` | `mariadb` | `postgres` (aliases: `postgresql`, `pgsql`)
+- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME`: Database connection
+- `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME`: Default admin for seeding
+- `MONGO_URI`: Your MongoDB connection string
+- `JWT_SECRET`: A strong secret key for token signing
+- `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS (default: `http://localhost:3000`)
+- `APP_TIMEZONE`: Timezone for log timestamps (e.g., `Asia/Karachi`)
+- `LOG_DIR`: Directory for storing log files (default: `storage/logs`)
+
+### Database driver examples
+
+**MySQL**
+```env
+DB_DRIVER=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASS=root
+DB_NAME=nest_db
+```
+
+**PostgreSQL**
+```env
+DB_DRIVER=postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASS=postgres
+DB_NAME=nest_db
+```
 
 ## 📦 Installation
 
 ```bash
-$ yarn install
+$ npm install
 ```
+
+## 🌱 Database seeding
+
+Creates a default admin user (skips if the email already exists). Password is bcrypt-hashed automatically.
+
+```bash
+$ npm run seed
+```
+
+Defaults (override in `.env`):
+
+| Variable | Default |
+|----------|---------|
+| `SEED_ADMIN_EMAIL` | `admin@example.com` |
+| `SEED_ADMIN_PASSWORD` | `Password123!` |
+| `SEED_ADMIN_NAME` | `Admin` |
 
 ## ▶️ Running the App
 
 ```bash
 # development
-$ yarn run start
+$ npm run start
 
 # watch mode
-$ yarn run start:dev
+$ npm run start:dev
 
 # production mode
-$ yarn run start:prod
+$ npm run start:prod
 ```
 
 After starting the application, the API will be available at `http://localhost:3000/api`.
 You can check the health status at `http://localhost:3000/api/health-check` or `http://localhost:3000/api/`.
 
+Login with the seeded admin:
+```http
+POST /api/auth/login
+{ "email": "admin@example.com", "password": "Password123!" }
+```
+
 ## 🧪 Testing
 
 ```bash
 # unit tests
-$ yarn run test
+$ npm run test
 
 # e2e tests
-$ yarn run test:e2e
+$ npm run test:e2e
 
 # test coverage
-$ yarn run test:cov
+$ npm run test:cov
 ```
 
 ## 📝 License

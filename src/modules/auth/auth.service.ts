@@ -86,10 +86,10 @@ export class AuthService {
       }
 
       // Find user by email
-      const user = await this.usersRepository.findOne({ 
-        where: { email } 
+      const user = await this.usersRepository.findOne({
+        where: { email },
       });
-      
+
       if (!user) {
         return ApiResponse.unauthorized('Invalid email or password');
       }
@@ -99,11 +99,9 @@ export class AuthService {
         return ApiResponse.unauthorized('Account is temporarily locked');
       }
 
-      // Validate password
+      // Validate password (supports bcrypt $2a$/$2b$/$2y$ and plain text)
       const isPasswordValid = await user.comparePassword(password);
-      console.log('isPasswordValid', isPasswordValid);
       if (!isPasswordValid) {
-        // Increment failed login attempts (you can implement this)
         return ApiResponse.unauthorized('Invalid email or password');
       }
 

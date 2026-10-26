@@ -1,40 +1,44 @@
-import { Controller, Get, Query, Res, Param } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  UseFilters,
+  UseInterceptors,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
-import { APP_CONSTANTS } from 'src/common/constants/app.constants';
-import { AdvancedFileLogger } from 'src/services/logger.service';
-
-
+import { CreateUserDto } from './dto/create-user.dto';
+import { CREATE_USER_SCHEMA } from './users.validation';
+import { APP_CONSTANTS } from '../../common/constants/app.constants';
+import { ValidationHelper } from '../../common/utils/validation.helper';
+import { HttpExceptionFilter } from '../../common/filters/http-exception.filter';
+import { ResponseInterceptor } from '../../common/interceptors/response.interceptor';
 
 @Controller('users')
+@UseFilters(HttpExceptionFilter)
+@UseInterceptors(ResponseInterceptor)
 export class UsersController {
-  constructor(
-    private readonly userService: UsersService,
-    private readonly logger: AdvancedFileLogger
-  ) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  async users(@Query('page') page = 1, @Query('limit') limit = APP_CONSTANTS.DEFAULT_PAGE_LIMIT, @Res() res) {
-
-
-    if (limit > APP_CONSTANTS.MAX_PAGE_LIMIT) {
-      console.log('Limit exceeded. Maximum limit is 100.');
-      this.logger.warn(`Limit exceeded. Maximum limit is ${APP_CONSTANTS.MAX_PAGE_LIMIT}.`);
-      return res.status(400).json({ error: `Limit exceeded. Maximum limit is ${APP_CONSTANTS.MAX_PAGE_LIMIT}.` });
-
-    }
-    return res.json(await this.userService.getUsers(Number(page), Number(limit)));
+  findAll(@Query('page') page: number = 1,@Query('limit') limit: number = APP_CONSTANTS.DEFAULT_PAGE_LIMIT) {
+    ValidationHelper.assertPageLimit(Number(limit));
+    return this.usersService.findAll(Number(page), Number(limit));
   }
 
   @Get(':id')
-  async getUser(@Param('id') id: string, @Res() res) {
-
-    console.log('Fetching user with id:', id);
-    const user = await this.userService.getUserById(id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    return res.json(user);
+  findOne(@Param('id') id: number | string) {
+    return this.usersService.findOne(id.toString());
   }
 
+  @Post('store')
+  @HttpCode(HttpStatus.CREATED)
+  create(@Body() dto: CreateUserDto) {
+    ValidationHelper.assert(dto, CREATE_USER_SCHEMA);
+    return this.usersService.create(dto);
+  }
 }

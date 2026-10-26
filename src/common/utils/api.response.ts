@@ -77,8 +77,8 @@ export class ApiResponse {
     /**
      * Send validation error response with Express Response object
      */
-    static sendValidationError(res: Response, message: string, data: any = null): Response {
-        return this.sendHttpResponse(res, this.validationError(message, data));
+    static sendValidationError(res: Response, message: string = 'Validation Error', data: any = null): Response {
+        return this.sendHttpResponse(res, this.validationError(data, message));
     }
 
     /**

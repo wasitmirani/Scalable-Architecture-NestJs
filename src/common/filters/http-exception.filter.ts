@@ -26,9 +26,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const responseObj = exceptionResponse as any;
         message = responseObj.message || exception.message;
         error = responseObj.error || exception.name;
-        
-        // Handle validation errors
-        if (Array.isArray(responseObj.message)) {
+
+        if (Array.isArray(responseObj.details)) {
+          validationErrors = responseObj.details;
+        } else if (Array.isArray(responseObj.message)) {
           validationErrors = responseObj.message;
           message = 'Validation failed';
         }

@@ -13,19 +13,19 @@ import * as bcrypt from 'bcrypt';
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn({ type: 'bigint' })
-  id: number;
+  id?: number | null;
 
   @Column({ type: 'varchar', length: 255 })
-  name: string;
+  name?: string | null;
 
   @Column({ type: 'varchar', length: 255 })
-  email: string;
+  email?: string | null;
 
   @Column({ type: 'timestamp', nullable: true, name: 'email_verified_at' })
   emailVerifiedAt?: Date | null;
 
   @Column({ type: 'varchar', length: 255 })
-  password: string;
+  password?: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true, name: 'remember_token' })
   rememberToken?: string | null;
@@ -60,7 +60,7 @@ export class User {
     default: 'default.png',
     name: 'thumbnail',
   })
-  thumbnail: string;
+  thumbnail?: string | null;
 
   private static readonly BCRYPT_ROUNDS = 12;
   private static readonly BCRYPT_PREFIX = /^\$2[aby]\$/;

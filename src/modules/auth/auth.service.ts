@@ -1,11 +1,10 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { Helpers } from '../../common/utils/helpers';
 import { ApiResponse, ApiResponseData } from '../../common/utils/api.response';
 import { 
   UnauthorizedException, 
@@ -13,6 +12,8 @@ import {
   BusinessException,
   NotFoundException 
 } from '../../common/exceptions/custom.exceptions';
+import { ValidationHelper } from '../../common/utils/validation.helper';
+import { CREATE_USER_SCHEMA } from '../users/users.validation';
 
 @Injectable()
 export class AuthService {
@@ -26,22 +27,10 @@ export class AuthService {
     try {
       const { email, password, name } = registerDto;
 
-      // Validate email format
-      if (!Helpers.isValidEmail(email)) {
-        throw new BusinessException('Invalid email format', 'INVALID_EMAIL');
-      }
+      ValidationHelper.assert({ email, password, name }, CREATE_USER_SCHEMA);
 
-      // Validate password strength
-      if (!Helpers.isStrongPassword(password)) {
-        throw new BusinessException(
-          'Password must be at least 8 characters long and contain uppercase, lowercase, numbers, and special characters',
-          'WEAK_PASSWORD'
-        );
-      }
-
-      // Check if user already exists
-      const existingUser = await this.usersRepository.findOne({ 
-        where: [{ email }] 
+      const existingUser = await this.usersRepository.findOne({
+        where: [{ email }],
       });
       
       if (existingUser) {
@@ -65,12 +54,14 @@ export class AuthService {
         'User registered successfully'
       );
     } catch (error) {
-      if (error instanceof BusinessException || 
-          error instanceof ConflictException) {
+      if (
+        error instanceof BusinessException ||
+        error instanceof ConflictException ||
+        error instanceof HttpException
+      ) {
         throw error;
       }
-      
-      // Log unexpected errors
+
       console.error('Registration error:', error);
       throw new BusinessException('Registration failed', 'REGISTRATION_ERROR');
     }

@@ -38,12 +38,20 @@ export interface ValidationResult {
  */
 export class ValidationHelper {
   /** Validate data and return structured errors (does not throw). */
-  static validate(data: Record<string, any>, schema: ValidationSchema): ValidationResult {
+  static validate(
+    data: Record<string, any>,
+    schema: ValidationSchema,
+  ): ValidationResult {
     const errors: Record<string, string[]> = {};
     const source = data ?? {};
 
     for (const [field, rules] of Object.entries(schema)) {
-      const fieldErrors = this.validateField(field, source[field], rules, source);
+      const fieldErrors = this.validateField(
+        field,
+        source[field],
+        rules,
+        source,
+      );
       if (fieldErrors.length) {
         errors[field] = fieldErrors;
       }
@@ -144,7 +152,9 @@ export class ValidationHelper {
   }
 
   static required(value: any, field = 'Field'): string | null {
-    return Helpers.isEmpty(value) ? `${this.humanize(field)} is required` : null;
+    return Helpers.isEmpty(value)
+      ? `${this.humanize(field)} is required`
+      : null;
   }
 
   static email(value: any, field = 'email'): string | null {
@@ -183,7 +193,8 @@ export class ValidationHelper {
 
     if (Number.isNaN(value)) return 'Limit must be a number';
     if (value < 1) return 'Limit must be at least 1';
-    if (value > maxLimit) return `Limit exceeded. Maximum limit is ${maxLimit}.`;
+    if (value > maxLimit)
+      return `Limit exceeded. Maximum limit is ${maxLimit}.`;
 
     return null;
   }
@@ -207,7 +218,9 @@ export class ValidationHelper {
    *   email: [ValidationHelper.required(email, 'email'), ValidationHelper.email(email)],
    * });
    */
-  static collect(fieldChecks: Record<string, Array<string | null | undefined>>): ValidationResult {
+  static collect(
+    fieldChecks: Record<string, Array<string | null | undefined>>,
+  ): ValidationResult {
     const errors: Record<string, string[]> = {};
 
     for (const [field, checks] of Object.entries(fieldChecks)) {
@@ -237,7 +250,10 @@ export class ValidationHelper {
     return typeof rule === 'string' ? rule : fallback;
   }
 
-  private static numberRule(rule: NumberRule): { value: number; message?: string } {
+  private static numberRule(rule: NumberRule): {
+    value: number;
+    message?: string;
+  } {
     return typeof rule === 'number' ? { value: rule } : rule;
   }
 
@@ -259,7 +275,11 @@ export class ValidationHelper {
     return customMessage || `${label} must match ${this.humanize(field)}`;
   }
 
-  private static inError(label: string, value: any, rule: InRule): string | null {
+  private static inError(
+    label: string,
+    value: any,
+    rule: InRule,
+  ): string | null {
     const values = Array.isArray(rule) ? rule : rule.values;
     const customMessage = Array.isArray(rule) ? undefined : rule.message;
 

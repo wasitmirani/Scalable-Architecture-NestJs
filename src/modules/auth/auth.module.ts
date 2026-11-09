@@ -1,31 +1,28 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { TenantsModule } from '../tenants/tenants.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
-import { JwtStrategy } from './jwt.strategy';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    // registerAsync so JWT_SECRET is read after ConfigModule/dotenv load
     JwtModule.registerAsync({
-      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'defaultSecret',
+        // validateEnv guarantees a strong secret; there is no fallback.
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: (config.get<string>('JWT_EXPIRES_IN') as any) || '60m',
+          algorithm: 'HS256',
+          expiresIn: (config.get<string>('JWT_EXPIRES_IN') ||
+            '15m') as `${number}m`,
         },
       }),
     }),
-    TypeOrmModule.forFeature([User]),
+    TenantsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtStrategy, PassportModule],
+  providers: [AuthService],
+  exports: [JwtModule],
 })
 export class AuthModule {}

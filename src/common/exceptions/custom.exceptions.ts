@@ -20,28 +20,31 @@ export class ValidationException extends HttpException {
 }
 
 export class BadRequestException extends HttpException {
-  constructor(message: string = 'Bad request') {
+  constructor(message: string = 'Bad request', code: string = 'BAD_REQUEST') {
     // Do not include stack trace in response
     super(
       {
         message,
         error: 'Bad Request',
-        code: 'BAD_REQUEST',
+        code,
       },
       HttpStatus.BAD_REQUEST,
     );
     // Remove stack from the response to avoid leaking it
-    (this as any).stack = undefined;
+    this.stack = undefined;
   }
 }
 
 export class UnauthorizedException extends HttpException {
-  constructor(message: string = 'Unauthorized access') {
+  constructor(
+    message: string = 'Unauthorized access',
+    code: string = 'UNAUTHORIZED',
+  ) {
     super(
       {
         message,
         error: 'Unauthorized',
-        code: 'UNAUTHORIZED',
+        code,
       },
       HttpStatus.UNAUTHORIZED,
     );
@@ -49,12 +52,15 @@ export class UnauthorizedException extends HttpException {
 }
 
 export class ForbiddenException extends HttpException {
-  constructor(message: string = 'Access forbidden') {
+  constructor(
+    message: string = 'Access forbidden',
+    code: string = 'FORBIDDEN',
+  ) {
     super(
       {
         message,
         error: 'Forbidden',
-        code: 'FORBIDDEN',
+        code,
       },
       HttpStatus.FORBIDDEN,
     );
@@ -62,12 +68,12 @@ export class ForbiddenException extends HttpException {
 }
 
 export class NotFoundException extends HttpException {
-  constructor(resource: string = 'Resource') {
+  constructor(resource: string = 'Resource', code: string = 'NOT_FOUND') {
     super(
       {
         message: `${resource} not found`,
         error: 'Not Found',
-        code: 'NOT_FOUND',
+        code,
       },
       HttpStatus.NOT_FOUND,
     );
@@ -75,12 +81,15 @@ export class NotFoundException extends HttpException {
 }
 
 export class ConflictException extends HttpException {
-  constructor(message: string = 'Resource conflict') {
+  constructor(
+    message: string = 'Resource conflict',
+    code: string = 'CONFLICT',
+  ) {
     super(
       {
         message,
         error: 'Conflict',
-        code: 'CONFLICT',
+        code,
       },
       HttpStatus.CONFLICT,
     );

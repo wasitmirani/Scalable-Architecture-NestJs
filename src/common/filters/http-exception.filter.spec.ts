@@ -25,6 +25,7 @@ describe('HttpExceptionFilter', () => {
   } as unknown as ArgumentsHost;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [HttpExceptionFilter],
     }).compile();
@@ -72,8 +73,8 @@ describe('HttpExceptionFilter', () => {
     );
   });
 
-  it('should handle generic Error', () => {
-    const exception = new Error('Generic error');
+  it('should handle generic Error without leaking its message', () => {
+    const exception = new Error('relation "users" does not exist');
 
     filter.catch(exception, mockHost);
 
@@ -81,7 +82,29 @@ describe('HttpExceptionFilter', () => {
     expect(mockJson).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'Internal server error',
-        error: 'Generic error',
+        error: 'InternalServerError',
+        code: 'INTERNAL_ERROR',
+      }),
+    );
+    expect(
+      JSON.stringify((mockJson.mock.calls as unknown[][])[0][0]),
+    ).not.toContain('relation');
+  });
+
+  it('should keep custom error codes', () => {
+    filter.catch(
+      new HttpException(
+        { message: 'Nope', code: 'MISSING_PERMISSION' },
+        HttpStatus.FORBIDDEN,
+      ),
+      mockHost,
+    );
+
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        code: 'MISSING_PERMISSION',
+        message: 'Nope',
       }),
     );
   });

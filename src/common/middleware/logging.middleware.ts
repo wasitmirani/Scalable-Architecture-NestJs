@@ -7,16 +7,15 @@ export class LoggingMiddleware implements NestMiddleware {
 
   use(req: Request, res: Response, next: NextFunction) {
     const { method, originalUrl, headers } = req;
-    
+
     // Log incoming request
     this.logger.log(`Incoming Request: ${method} ${originalUrl}`);
-    
+
     // Log authorization header (masked for security)
     if (headers.authorization) {
       const authHeader = headers.authorization;
-      const maskedHeader = authHeader.length > 10 
-        ? `${authHeader.substring(0, 10)}...` 
-        : '***';
+      const maskedHeader =
+        authHeader.length > 10 ? `${authHeader.substring(0, 10)}...` : '***';
       this.logger.debug(`Authorization Header: ${maskedHeader}`);
     }
 

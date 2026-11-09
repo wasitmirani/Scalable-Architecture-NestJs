@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { ServiceUnavailableException } from './common/exceptions/custom.exceptions';
 
 @Injectable()
 export class AppService {
-  healthCheck(): string {
-    return 'Welcome to NestApp Service';
-  }
+  constructor(private readonly dataSource: DataSource) {}
 
-  appInfo(): string {
-    return "NestApp Service";
+  async health() {
+    try {
+      await this.dataSource.query('SELECT 1');
+    } catch {
+      throw new ServiceUnavailableException('Database unavailable');
+    }
+    return { status: 'ok', database: 'ok' };
   }
 }

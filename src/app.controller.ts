@@ -1,16 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL, Version } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
+import { Public } from './common/decorators/public.decorator';
+
+@ApiTags('Health')
+@Public()
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) { }
+  constructor(private readonly appService: AppService) {}
 
-  @Get(['/', 'health-check'])
-  healthCheck(): string {
-    return this.appService.healthCheck();
-  }
-
-  @Get('/app-info')
-  appInfo() {
-    return this.appService.appInfo();
+  /** Liveness and database readiness: GET /api/health */
+  @Get('health')
+  @Version(VERSION_NEUTRAL)
+  health() {
+    return this.appService.health();
   }
 }

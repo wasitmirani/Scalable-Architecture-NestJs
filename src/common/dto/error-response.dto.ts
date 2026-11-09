@@ -22,15 +22,15 @@ export class ErrorResponseDto {
   @ApiProperty({ example: 'Bad Request' })
   error: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: [
       {
         field: 'email',
         value: 'invalid-email',
-        errors: ['email must be an email']
-      }
+        errors: ['email must be an email'],
+      },
     ],
-    required: false 
+    required: false,
   })
   details?: any[];
 

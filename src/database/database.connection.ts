@@ -2,9 +2,6 @@ import 'reflect-metadata';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { dbOptions } from './typeorm.config';
 
-export const DatabaseConnection = TypeOrmModule.forRoot({
-  ...dbOptions,
-  autoLoadEntities: true,
-});
+export const DatabaseConnection = TypeOrmModule.forRoot(dbOptions);
 
 export default DatabaseConnection;

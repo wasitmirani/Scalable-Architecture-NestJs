@@ -1,26 +1,23 @@
+import { join } from 'path';
 import { DataSourceOptions } from 'typeorm';
 import * as dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
-type DbDriver = 'mysql' | 'mariadb' | 'postgres';
-
-const raw = (process.env.DB_DRIVER || 'mysql').toLowerCase();
-const type: DbDriver = ['postgres', 'postgresql', 'pgsql'].includes(raw)
-  ? 'postgres'
-  : raw === 'mariadb'
-    ? 'mariadb'
-    : 'mysql';
-
-export const dbOptions = {
-  type,
+/**
+ * PostgreSQL is the only supported database. The schema is owned by the
+ * migrations in ./migrations — `synchronize` is never enabled.
+ */
+export const dbOptions: DataSourceOptions = {
+  type: 'postgres',
   host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT) || (type === 'postgres' ? 5432 : 3306),
-  username: process.env.DB_USER || (type === 'postgres' ? 'postgres' : 'root'),
+  port: Number(process.env.DB_PORT) || 5432,
+  username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'sample_db',
-  synchronize:
-    process.env.DB_SYNCHRONIZE === 'true' ||
-    process.env.NODE_ENV !== 'production',
-   logging: process.env.DB_LOGGING !== 'false',
-} as DataSourceOptions;
+  database: process.env.DB_NAME || 'birdcrm_db',
+  synchronize: false,
+  logging: process.env.DB_LOGGING === 'true',
+  entities: [join(__dirname, '..', 'modules', '**', '*.entity.{ts,js}')],
+  migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
+  migrationsTransactionMode: 'each',
+};

@@ -1,11 +1,15 @@
-import { IsEmail, IsNotEmpty, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { normalizeEmail } from './register.dto';
 
 export class LoginDto {
+  @Transform(normalizeEmail)
   @IsEmail()
-  @IsNotEmpty()
+  @MaxLength(254)
   email: string;
 
+  @IsString()
   @IsNotEmpty()
-  @MinLength(8)
+  @MaxLength(128)
   password: string;
 }

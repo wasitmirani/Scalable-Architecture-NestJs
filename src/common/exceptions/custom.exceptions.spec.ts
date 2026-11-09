@@ -1,16 +1,16 @@
-import { 
-  BusinessException, 
-  ValidationException, 
+import {
+  BusinessException,
+  ValidationException,
   UnauthorizedException,
   NotFoundException,
-  ConflictException 
+  ConflictException,
 } from './custom.exceptions';
 
 describe('Custom Exceptions', () => {
   describe('BusinessException', () => {
     it('should create business exception with default code', () => {
       const exception = new BusinessException('Business error');
-      
+
       expect(exception.getStatus()).toBe(400);
       expect(exception.getResponse()).toEqual({
         message: 'Business error',
@@ -20,7 +20,7 @@ describe('Custom Exceptions', () => {
 
     it('should create business exception with custom code', () => {
       const exception = new BusinessException('Business error', 'CUSTOM_ERROR');
-      
+
       expect(exception.getResponse()).toEqual({
         message: 'Business error',
         code: 'CUSTOM_ERROR',
@@ -34,9 +34,9 @@ describe('Custom Exceptions', () => {
         { field: 'email', errors: ['must be email'] },
         { field: 'password', errors: ['too short'] },
       ];
-      
+
       const exception = new ValidationException(errors);
-      
+
       expect(exception.getStatus()).toBe(422);
       expect(exception.getResponse()).toEqual({
         message: 'Validation failed',
@@ -49,7 +49,7 @@ describe('Custom Exceptions', () => {
   describe('UnauthorizedException', () => {
     it('should create unauthorized exception with default message', () => {
       const exception = new UnauthorizedException();
-      
+
       expect(exception.getStatus()).toBe(401);
       expect(exception.getResponse()).toEqual({
         message: 'Unauthorized access',
@@ -59,8 +59,10 @@ describe('Custom Exceptions', () => {
     });
 
     it('should create unauthorized exception with custom message', () => {
-      const exception = new UnauthorizedException('Custom unauthorized message');
-      
+      const exception = new UnauthorizedException(
+        'Custom unauthorized message',
+      );
+
       expect(exception.getResponse()).toEqual({
         message: 'Custom unauthorized message',
         error: 'Unauthorized',
@@ -72,7 +74,7 @@ describe('Custom Exceptions', () => {
   describe('NotFoundException', () => {
     it('should create not found exception with default resource', () => {
       const exception = new NotFoundException();
-      
+
       expect(exception.getStatus()).toBe(404);
       expect(exception.getResponse()).toEqual({
         message: 'Resource not found',
@@ -83,7 +85,7 @@ describe('Custom Exceptions', () => {
 
     it('should create not found exception with custom resource', () => {
       const exception = new NotFoundException('User');
-      
+
       expect(exception.getResponse()).toEqual({
         message: 'User not found',
         error: 'Not Found',
@@ -95,7 +97,7 @@ describe('Custom Exceptions', () => {
   describe('ConflictException', () => {
     it('should create conflict exception with default message', () => {
       const exception = new ConflictException();
-      
+
       expect(exception.getStatus()).toBe(409);
       expect(exception.getResponse()).toEqual({
         message: 'Resource conflict',
@@ -106,7 +108,7 @@ describe('Custom Exceptions', () => {
 
     it('should create conflict exception with custom message', () => {
       const exception = new ConflictException('Custom conflict message');
-      
+
       expect(exception.getResponse()).toEqual({
         message: 'Custom conflict message',
         error: 'Conflict',

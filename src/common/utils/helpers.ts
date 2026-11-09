@@ -17,7 +17,10 @@ export class Helpers {
    * @param name - Input name to generate UUID from
    * @param namespace - Namespace UUID (default: DNS namespace)
    */
-  static generateNamedUUID(name: string, namespace: string = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'): string {
+  static generateNamedUUID(
+    name: string,
+    namespace: string = '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+  ): string {
     return uuidv5(name, namespace);
   }
 
@@ -26,8 +29,14 @@ export class Helpers {
    * @param prefix - Prefix for the username (default: 'user')
    * @param randomLength - Length of random suffix (default: 6)
    */
-  static generateUsername(prefix: string = 'user', randomLength: number = 6): string {
-    const randomString = crypto.randomBytes(Math.ceil(randomLength / 2)).toString('hex').slice(0, randomLength);
+  static generateUsername(
+    prefix: string = 'user',
+    randomLength: number = 6,
+  ): string {
+    const randomString = crypto
+      .randomBytes(Math.ceil(randomLength / 2))
+      .toString('hex')
+      .slice(0, randomLength);
     return `${prefix}_${randomString}`;
   }
 
@@ -50,15 +59,15 @@ export class Helpers {
    */
   static generateRandomString(
     length: number = 10,
-    charset: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    charset: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
   ): string {
     let result = '';
     const charsetLength = charset.length;
-    
+
     for (let i = 0; i < length; i++) {
       result += charset.charAt(Math.floor(Math.random() * charsetLength));
     }
-    
+
     return result;
   }
 
@@ -119,12 +128,12 @@ export class Helpers {
    */
   static isStrongPassword(password: string, minLength: number = 8): boolean {
     if (password.length < minLength) return false;
-    
+
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
-    
+    const hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
+
     return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar;
   }
 
@@ -133,15 +142,18 @@ export class Helpers {
    * @param phoneNumber - Phone number to format
    * @param countryCode - Country code (default: '+1')
    */
-  static formatPhoneNumber(phoneNumber: string, countryCode: string = '+1'): string {
+  static formatPhoneNumber(
+    phoneNumber: string,
+    countryCode: string = '+1',
+  ): string {
     // Remove all non-digit characters
     const cleaned = phoneNumber.replace(/\D/g, '');
-    
+
     // If the number already has country code, return as is
     if (cleaned.startsWith(countryCode.replace('+', ''))) {
       return `+${cleaned}`;
     }
-    
+
     // Add country code if missing
     return `${countryCode}${cleaned}`;
   }
@@ -155,21 +167,21 @@ export class Helpers {
     const extension = originalName.split('.').pop();
     const timestamp = Date.now();
     const randomString = this.generateRandomString(8);
-    
-    const baseName = prefix ? `${prefix}_${timestamp}_${randomString}` : `${timestamp}_${randomString}`;
-    
+
+    const baseName = prefix
+      ? `${prefix}_${timestamp}_${randomString}`
+      : `${timestamp}_${randomString}`;
+
     return extension ? `${baseName}.${extension}` : baseName;
   }
-
 
   /**
    * Delay execution for specified time
    * @param ms - Milliseconds to delay
    */
   static delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
-
 
   /**
    * Generate a unique order/reference ID
@@ -177,7 +189,10 @@ export class Helpers {
    */
   static generateReferenceId(prefix: string = 'ORD'): string {
     const timestamp = Date.now().toString();
-    const randomPart = this.generateRandomString(6, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+    const randomPart = this.generateRandomString(
+      6,
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    );
     return `${prefix}_${timestamp}_${randomPart}`;
   }
 
@@ -198,14 +213,19 @@ export class Helpers {
    * @param text - Text to capitalize
    */
   static capitalizeWords(text: string): string {
-    return text.replace(/\b\w/g, char => char.toUpperCase());
+    return text.replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
   /**
    * Generate a random color hex code
    */
   static generateRandomColor(): string {
-    return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+    return (
+      '#' +
+      Math.floor(Math.random() * 16777215)
+        .toString(16)
+        .padStart(6, '0')
+    );
   }
 
   /**
@@ -213,24 +233,30 @@ export class Helpers {
    * @param data - Data to mask
    * @param type - Type of data to mask ('email', 'phone', 'creditCard')
    */
-  static maskSensitiveData(data: string, type: 'email' | 'phone' | 'creditCard' = 'email'): string {
+  static maskSensitiveData(
+    data: string,
+    type: 'email' | 'phone' | 'creditCard' = 'email',
+  ): string {
     switch (type) {
-      case 'email':
+      case 'email': {
         const [localPart, domain] = data.split('@');
-        const maskedLocal = localPart.length > 2 
-          ? localPart.substring(0, 2) + '*'.repeat(localPart.length - 2)
-          : '*'.repeat(localPart.length);
+        const maskedLocal =
+          localPart.length > 2
+            ? localPart.substring(0, 2) + '*'.repeat(localPart.length - 2)
+            : '*'.repeat(localPart.length);
         return `${maskedLocal}@${domain}`;
-      
-      case 'phone':
+      }
+
+      case 'phone': {
         const cleaned = data.replace(/\D/g, '');
-        return cleaned.length > 4 
+        return cleaned.length > 4
           ? '***-***-' + cleaned.substring(cleaned.length - 4)
           : '***-' + cleaned;
-      
+      }
+
       case 'creditCard':
         return '****-****-****-' + data.slice(-4);
-      
+
       default:
         return data;
     }

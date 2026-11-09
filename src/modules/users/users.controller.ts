@@ -1,44 +1,28 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Query,
-  UseFilters,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Body, Controller, Patch } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { UserOnly } from '../../common/decorators/roles.decorator';
+import { CurrentUser, ReqMeta } from '../../common/decorators/user.decorator';
+import type { Principal, RequestMeta } from '../../common/types/principal';
+import { ApiResponse } from '../../common/utils/api.response';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { CREATE_USER_SCHEMA } from './users.validation';
-import { APP_CONSTANTS } from '../../common/constants/app.constants';
-import { ValidationHelper } from '../../common/utils/validation.helper';
-import { HttpExceptionFilter } from '../../common/filters/http-exception.filter';
-import { ResponseInterceptor } from '../../common/interceptors/response.interceptor';
 
+/** Account-level endpoints. Team membership lives under /tenants/:tenantId/members. */
+@ApiTags('Account')
 @Controller('users')
-@UseFilters(HttpExceptionFilter)
-@UseInterceptors(ResponseInterceptor)
+@UserOnly()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Get()
-  findAll(@Query('page') page: number = 1,@Query('limit') limit: number = APP_CONSTANTS.DEFAULT_PAGE_LIMIT) {
-    ValidationHelper.assertPageLimit(Number(limit));
-    return this.usersService.findAll(Number(page), Number(limit));
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: number | string) {
-    return this.usersService.findOne(id.toString());
-  }
-
-  @Post('store')
-  @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateUserDto) {
-    ValidationHelper.assert(dto, CREATE_USER_SCHEMA);
-    return this.usersService.create(dto);
+  @Patch('me')
+  async updateMe(
+    @CurrentUser() user: Extract<Principal, { type: 'user' }>,
+    @Body() dto: UpdateProfileDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return ApiResponse.success(
+      await this.usersService.updateProfile(user, dto, meta),
+      'Profile updated',
+    );
   }
 }

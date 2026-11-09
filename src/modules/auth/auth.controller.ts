@@ -1,110 +1,163 @@
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  UsePipes, 
-  Get, 
-  UseGuards, 
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
-  UseFilters,
-  UseInterceptors
+  Param,
+  ParseUUIDPipe,
+  Post,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { ApiTags } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
+import { UserOnly } from '../../common/decorators/roles.decorator';
+import { CurrentUser, ReqMeta } from '../../common/decorators/user.decorator';
+import type { Principal, RequestMeta } from '../../common/types/principal';
+import { ApiResponse } from '../../common/utils/api.response';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './dto/password.dto';
 import { RegisterDto } from './dto/register.dto';
-import { GetUser } from './get-user.decorator';
-import { User } from '../users/entities/user.entity';
-import { ValidationPipe } from '../../common/pipes/validation.pipe';
-import { HttpExceptionFilter } from '../../common/filters/http-exception.filter';
-import { ResponseInterceptor } from '../../common/interceptors/response.interceptor';
-import { BusinessException } from '../../common/exceptions/custom.exceptions';
-import { ApiResponse } from '../../common/utils/api.response';
+import { RefreshTokenDto, VerifyEmailDto } from './dto/token.dto';
 
+type UserPrincipal = Extract<Principal, { type: 'user' }>;
+
+@ApiTags('Auth')
 @Controller('auth')
-@UseFilters(HttpExceptionFilter)
-@UseInterceptors(ResponseInterceptor)
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private readonly auth: AuthService) {}
 
+  @Public()
   @Post('register')
-  @UsePipes(ValidationPipe)
-  @HttpCode(201)
-  async register(@Body() registerDto: RegisterDto) {
-    return await this.authService.register(registerDto);
+  async register(@Body() dto: RegisterDto, @ReqMeta() meta: RequestMeta) {
+    return ApiResponse.created(
+      await this.auth.register(dto, meta),
+      'Account created',
+    );
   }
 
+  @Public()
   @Post('login')
-  @UsePipes(ValidationPipe)
   @HttpCode(200)
-  async login(@Body() loginDto: LoginDto) {
-    return await this.authService.login(loginDto);
-  }
-
-  @Post('refresh-token')
-  @HttpCode(200)
-  async refreshToken(@Body('refresh_token') refreshToken: string) {
-    if (!refreshToken) {
-      throw new BusinessException('Refresh token is required', 'MISSING_REFRESH_TOKEN');
-    }
-
-    return await this.authService.refreshToken(refreshToken);
-  }
-
-  @Get('profile')
-  @UseGuards(AuthGuard('jwt'))
-  @HttpCode(200)
-  getProfile(@GetUser() user: User) {
-    // Remove password from response
-    const { password, ...userWithoutPassword } = user;
+  async login(@Body() dto: LoginDto, @ReqMeta() meta: RequestMeta) {
     return ApiResponse.success(
-      { user: userWithoutPassword },
-      'Profile retrieved successfully'
+      await this.auth.login(dto, meta),
+      'Login successful',
+    );
+  }
+
+  @Public()
+  @Post('refresh')
+  @HttpCode(200)
+  async refresh(@Body() dto: RefreshTokenDto, @ReqMeta() meta: RequestMeta) {
+    return ApiResponse.success(
+      await this.auth.refresh(dto.refreshToken, meta),
+      'Token refreshed',
     );
   }
 
   @Post('logout')
-  @UseGuards(AuthGuard('jwt'))
   @HttpCode(200)
-  async logout() {
-    // In a real application, you might want to blacklist the token
-    return ApiResponse.success(null, 'Logout successful');
+  @UserOnly()
+  async logout(
+    @CurrentUser() user: UserPrincipal,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    await this.auth.logout(user, meta);
+    return ApiResponse.success(null, 'Logged out');
   }
 
-  
-  @Post('debug-verify')
-  async debugVerifyToken(@Body('token') token: string) {
-    try {
-      if (!token) {
-        return { valid: false, error: 'No token provided' };
-      }
-
-      // Remove 'Bearer ' prefix if present
-      const cleanToken = token.replace('Bearer ', '');
-      
-      const secret = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production-2024';
-      const decoded = this.authService['jwtService'].verify(cleanToken);
-      
-      return {
-        valid: true,
-        decoded,
-        secret: secret.substring(0, 10) + '...', // Only show first 10 chars for security
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        error: error.message,
-        secret: (process.env.JWT_SECRET || 'default').substring(0, 10) + '...',
-      };
-    }
+  @Get('me')
+  @UserOnly()
+  async me(@CurrentUser() user: UserPrincipal) {
+    return ApiResponse.success(
+      await this.auth.profile(user.userId),
+      'Profile fetched',
+    );
   }
 
-  @Get('check-env')
-  checkEnv() {
-    return {
-      JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT SET',
-      JWT_SECRET_LENGTH: process.env.JWT_SECRET?.length || 0,
-      NODE_ENV: process.env.NODE_ENV,
-    };
+  @Get('sessions')
+  @UserOnly()
+  async sessions(@CurrentUser() user: UserPrincipal) {
+    return ApiResponse.success(
+      await this.auth.listSessions(user),
+      'Sessions fetched',
+    );
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(200)
+  @UserOnly()
+  async revokeSession(
+    @CurrentUser() user: UserPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    await this.auth.revokeSession(user, id, meta);
+    return ApiResponse.success(null, 'Session revoked');
+  }
+
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(202)
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    await this.auth.forgotPassword(dto.email, meta);
+    return ApiResponse.success(
+      null,
+      'If an account exists for this email, a reset link has been sent',
+      202,
+    );
+  }
+
+  @Public()
+  @Post('password/reset')
+  @HttpCode(200)
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    await this.auth.resetPassword(dto, meta);
+    return ApiResponse.success(
+      null,
+      'Password has been reset. Please sign in.',
+    );
+  }
+
+  @Post('password/change')
+  @HttpCode(200)
+  @UserOnly()
+  async changePassword(
+    @CurrentUser() user: UserPrincipal,
+    @Body() dto: ChangePasswordDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    await this.auth.changePassword(user, dto, meta);
+    return ApiResponse.success(
+      null,
+      'Password changed. Other sessions were signed out.',
+    );
+  }
+
+  @Public()
+  @Post('email/verify')
+  @HttpCode(200)
+  async verifyEmail(@Body() dto: VerifyEmailDto, @ReqMeta() meta: RequestMeta) {
+    await this.auth.verifyEmail(dto.token, meta);
+    return ApiResponse.success(null, 'Email verified');
+  }
+
+  @Post('email/resend')
+  @HttpCode(202)
+  @UserOnly()
+  async resendVerification(@CurrentUser() user: UserPrincipal) {
+    await this.auth.resendVerification(user);
+    return ApiResponse.success(null, 'Verification email sent', 202);
   }
 }

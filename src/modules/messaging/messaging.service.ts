@@ -8,6 +8,7 @@ import {
 } from '../records/record-store';
 import { matchesSegment, type SegmentRuleGroup } from '../crm/segment-engine';
 import { EMPTY_STATS } from './messaging.collections';
+import { publicRow } from '../records/records.service';
 
 interface Audience {
   listIds: string[];
@@ -53,7 +54,7 @@ export function providerNotConnected(channel: string) {
 }
 
 /** Same checks as the UI's campaignProblems(); the server re-validates on launch. */
-function campaignProblems(c: Campaign): string[] {
+function campaignProblems(c: Campaign, due = false): string[] {
   const problems: string[] = [];
   if (!c.senderLabel) problems.push('Choose a sender.');
   if (c.channel === 'email' && !c.subject?.trim())
@@ -65,6 +66,7 @@ function campaignProblems(c: Campaign): string[] {
     problems.push('Choose at least one list or segment.');
   }
   if (
+    !due &&
     c.schedule?.type === 'scheduled' &&
     (!c.schedule.at || Date.parse(c.schedule.at) < Date.now())
   ) {
@@ -137,9 +139,9 @@ export class MessagingService {
    * Sends now or schedules. Sending queues one message per reachable contact in the
    * message log; delivery happens once a channel provider is connected.
    */
-  async launch(ctx: HookContext, id: string) {
+  async launch(ctx: HookContext, id: string, opts: { due?: boolean } = {}) {
     const campaign = await ctx.store.find<Campaign>('campaigns', id);
-    const problems = campaignProblems(campaign);
+    const problems = campaignProblems(campaign, opts.due);
     if (problems.length) {
       throw new HttpException(
         {
@@ -150,7 +152,8 @@ export class MessagingService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    if (campaign.schedule?.type === 'scheduled') {
+    // `due`: the delivery worker launches a scheduled campaign whose time has come.
+    if (campaign.schedule?.type === 'scheduled' && !opts.due) {
       return this.transition(ctx, id, ['draft'], 'scheduled');
     }
     if (!['draft', 'scheduled'].includes(campaign.status)) {
@@ -252,8 +255,13 @@ export class MessagingService {
     const events: unknown[] = Array.isArray(message.events)
       ? (message.events as unknown[])
       : [];
-    return ctx.store.patch('messages', id, {
+    const updated = await ctx.store.patch('messages', id, {
       status: 'queued',
+      errorCode: null,
+      // A manual retry starts a fresh series of attempts.
+      _attempts: 0,
+      _nextAttemptAt: null,
+      _lockedAt: null,
       events: [
         ...events,
         {
@@ -263,6 +271,7 @@ export class MessagingService {
         },
       ],
     });
+    return publicRow(updated);
   }
 
   /** One brand kit per workspace, created on first read. */

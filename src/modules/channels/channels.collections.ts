@@ -11,11 +11,8 @@ const channelResource = (
   searchFields,
 });
 
-export const channelAccountsCollection = channelResource('channel-accounts', [
-  'name',
-  'identifier',
-  'provider',
-]);
+/** Credential handling and provider checks live in ./channel-accounts. */
+export { channelAccountsCollection } from './channel-accounts';
 export const emailSendersCollection: CollectionDef = {
   ...channelResource('email-senders', ['name', 'email']),
   serverFields: ['verified'],

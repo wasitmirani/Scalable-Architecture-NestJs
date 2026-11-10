@@ -246,13 +246,17 @@ describe('Tenant isolation & access control (e2e)', () => {
         .expect(403);
       expect(escalate.body.code).toBe('PERMISSION_ESCALATION');
 
+      // The built-in viewer role also reads product data the inviter cannot see,
+      // so the inviter may only grant a role within their own permissions.
+      const lite = await http()
+        .post('/api/v1/roles')
+        .set(asUser(a))
+        .send({ name: 'Directory reader', permissions: ['tenant.read', 'members.read'] })
+        .expect(201);
       await http()
         .post('/api/v1/invitations')
         .set(asUser(invitee, a.tenantId))
-        .send({
-          email: 'new-viewer@example.test',
-          roleId: await roleId(a, 'viewer'),
-        })
+        .send({ email: 'new-reader@example.test', roleId: lite.body.data.id })
         .expect(201);
     });
 

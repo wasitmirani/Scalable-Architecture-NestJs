@@ -10,9 +10,14 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 
 /** HTTP configuration shared by main.ts and the e2e tests. */
 export function configureApp(app: INestApplication): void {
-  // Public workflow webhooks live at `/hooks/workflows/:token`, outside the API prefix.
+  // Public endpoints outside the API prefix: workflow webhooks, unsubscribe links in
+  // emails, and OAuth callbacks from Google and Microsoft.
   app.setGlobalPrefix(process.env.API_PREFIX || 'api', {
-    exclude: [{ path: 'hooks/workflows/:token', method: RequestMethod.POST }],
+    exclude: [
+      { path: 'hooks/workflows/:token', method: RequestMethod.POST },
+      { path: 'unsubscribe/:token', method: RequestMethod.ALL },
+      { path: 'oauth/email/:provider/callback', method: RequestMethod.GET },
+    ],
   });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 

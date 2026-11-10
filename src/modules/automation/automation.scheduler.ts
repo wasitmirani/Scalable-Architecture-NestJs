@@ -9,6 +9,7 @@ import { RecordsService } from '../records/records.service';
 import { AutomationService } from './automation.service';
 
 const INTERVAL_MS = 30_000;
+const DATE_TRIGGER_EVERY_MS = 60 * 60_000;
 
 /**
  * Durable delays: every 30 seconds, resumes waiting runs whose time has come in
@@ -22,6 +23,7 @@ export class AutomationScheduler
   private readonly logger = new Logger(AutomationScheduler.name);
   private timer: NodeJS.Timeout | null = null;
   private busy = false;
+  private lastDateSweep = 0;
 
   constructor(
     private readonly dataSource: DataSource,
@@ -41,6 +43,27 @@ export class AutomationScheduler
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * "Date reached" automations (birthdays, renewals): hourly, in workspaces that have
+   * one live. Enrolment is once per contact per year, so repeats and restarts are safe.
+   */
+  async dateTriggers() {
+    const tenants = await this.dataSource.query<{ tenant_id: string }[]>(
+      `SELECT DISTINCT tenant_id FROM product_records
+       WHERE collection = 'workflows' AND data->>'status' = 'active'
+         AND data->'versions'->-1->'definition'->'trigger'->>'type' = 'date_attribute'`,
+    );
+    for (const { tenant_id } of tenants) {
+      const tenant = { tenantId: tenant_id, memberId: null, roleKey: null, permissions: new Set<string>() };
+      try {
+        const n = await this.records.run(tenant, 'Scheduler', (ctx) => this.automation.dateTriggers(ctx));
+        if (n) this.logger.log(`Date triggers enrolled ${n} contact(s) in workspace ${tenant_id}`);
+      } catch (error) {
+        this.logger.error(`Date triggers failed for workspace ${tenant_id}: ${(error as Error).message}`);
+      }
+    }
   }
 
   async sweep() {
@@ -73,6 +96,10 @@ export class AutomationScheduler
             `Resuming runs failed for workspace ${tenant_id}: ${(error as Error).message}`,
           );
         }
+      }
+      if (Date.now() - this.lastDateSweep >= DATE_TRIGGER_EVERY_MS) {
+        this.lastDateSweep = Date.now();
+        await this.dateTriggers();
       }
     } catch (error) {
       this.logger.error(`Scheduler sweep failed: ${(error as Error).message}`);

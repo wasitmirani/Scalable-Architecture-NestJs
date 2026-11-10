@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ForbiddenException } from '../../common/exceptions/custom.exceptions';
 import type { Principal, TenantContext } from '../../common/types/principal';
@@ -11,15 +11,26 @@ import {
   type ListQuery,
   type Page,
   type Row,
+  type StoreChange,
 } from './record-store';
 
 const SEEDED = '_seeded';
+const MAX_CHANGE_DEPTH = 4;
+
+export type ChangeListener = (
+  ctx: HookContext,
+  changes: StoreChange[],
+  depth: number,
+) => Promise<void>;
 
 /** Paths sorted longest first, so `contacts/imports` wins over `contacts`. */
 const BY_PATH = [...COLLECTIONS].sort((a, b) => b.path.length - a.path.length);
 
 @Injectable()
 export class RecordsService {
+  private readonly logger = new Logger(RecordsService.name);
+  private readonly listeners: ChangeListener[] = [];
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly tenantDb: TenantDb,
@@ -70,15 +81,64 @@ export class RecordsService {
     return this.run(tenant, await this.actorName(principal), work);
   }
 
+  /**
+   * Registers a listener for writes to watched collections (contacts, deals).
+   * Used by automation triggers; listeners run after the work, in the same transaction.
+   */
+  onChange(listener: ChangeListener) {
+    this.listeners.push(listener);
+  }
+
   /** Runs work in one tenant transaction with a store and hook context. */
   run<T>(
     tenant: TenantContext,
     actorName: string,
     work: (ctx: HookContext) => Promise<T>,
   ): Promise<T> {
-    return this.tenantDb.run(tenant.tenantId, (em) =>
-      work({ store: new RecordStore(em, tenant.tenantId), tenant, actorName }),
-    );
+    return this.tenantDb.run(tenant.tenantId, async (em) => {
+      const ctx = {
+        store: new RecordStore(em, tenant.tenantId),
+        tenant,
+        actorName,
+      };
+      const result = await work(ctx);
+      await this.drainChanges(ctx);
+      return result;
+    });
+  }
+
+  /**
+   * Hands buffered writes to listeners. Listeners may write again (an automation tags
+   * a contact, which starts another automation), so this repeats, up to a depth limit
+   * that stops loops. Each listener runs in a savepoint: a failing automation is
+   * logged and rolled back without undoing the user's own change.
+   */
+  private async drainChanges(ctx: HookContext) {
+    if (!this.listeners.length) {
+      ctx.store.changes.length = 0;
+      return;
+    }
+    for (let depth = 0; depth < MAX_CHANGE_DEPTH; depth++) {
+      const batch = ctx.store.changes.splice(0);
+      if (!batch.length) return;
+      for (const listener of this.listeners) {
+        await ctx.store.em.query('SAVEPOINT change_listener');
+        try {
+          await listener(ctx, batch, depth);
+          await ctx.store.em.query('RELEASE SAVEPOINT change_listener');
+        } catch (error) {
+          await ctx.store.em.query('ROLLBACK TO SAVEPOINT change_listener');
+          this.logger.error(
+            `Change listener failed in workspace ${ctx.tenant.tenantId}: ${(error as Error).message}`,
+          );
+        }
+      }
+    }
+    const dropped = ctx.store.changes.splice(0).length;
+    if (dropped)
+      this.logger.warn(
+        `Stopped after ${MAX_CHANGE_DEPTH} rounds of chained automation triggers (${dropped} change(s) not processed); check for automations that trigger each other.`,
+      );
   }
 
   /** Inserts a collection's default rows the first time a workspace touches it. */

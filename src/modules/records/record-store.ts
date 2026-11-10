@@ -125,15 +125,75 @@ function toRow(r: DbRow): Row {
   };
 }
 
+/** Collections whose writes are reported to change listeners (automation triggers). */
+export const WATCHED_COLLECTIONS = new Set(['contacts', 'deals']);
+
+/** One write to a watched collection: `before` is null for inserts. */
+export interface StoreChange {
+  collection: string;
+  before: Row | null;
+  after: Row;
+}
+
 /**
  * Data access for product collections inside one tenant transaction (see TenantDb.run).
  * Every query also filters by tenant_id; RLS is the second line of defence.
  */
 export class RecordStore {
+  /** Writes to watched collections, drained by RecordsService at the end of the unit of work. */
+  readonly changes: StoreChange[] = [];
+
   constructor(
     readonly em: EntityManager,
     readonly tenantId: string,
   ) {}
+
+  private track(collection: string, before: Row | null, after: Row) {
+    if (WATCHED_COLLECTIONS.has(collection))
+      this.changes.push({ collection, before, after });
+  }
+
+  /** UPDATE that also returns the row as it was before (watched collections only). */
+  private async update(
+    collection: string,
+    id: string,
+    setSql: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ row: DbRow; before: Row | null } | null> {
+    if (!WATCHED_COLLECTIONS.has(collection)) {
+      const [row] = returned<DbRow>(
+        await this.em.query(
+          `UPDATE product_records SET data = ${setSql}, updated_at = now()
+         WHERE tenant_id = $1 AND collection = $2 AND id = $3
+         RETURNING id, data, created_at, updated_at`,
+          [this.tenantId, collection, id, JSON.stringify(clean(payload))],
+        ),
+      );
+      return row ? { row, before: null } : null;
+    }
+    // The CTE reads the snapshot from before this statement, so `before` is the old row.
+    const [row] = returned<DbRow & { before: Record<string, unknown> }>(
+      await this.em.query(
+        `WITH prev AS (
+           SELECT id, data, created_at, updated_at FROM product_records
+           WHERE tenant_id = $1 AND collection = $2 AND id = $3
+         )
+         UPDATE product_records p SET data = ${setSql.replace(/\bdata\b/g, 'p.data')}, updated_at = now()
+         FROM prev WHERE p.id = prev.id
+         RETURNING p.id, p.data, p.created_at, p.updated_at, prev.data AS before, prev.updated_at AS before_updated_at`,
+        [this.tenantId, collection, id, JSON.stringify(clean(payload))],
+      ),
+    );
+    if (!row) return null;
+    const before = toRow({
+      id: row.id,
+      data: row.before,
+      created_at: row.created_at,
+      updated_at: (row as unknown as { before_updated_at: Date })
+        .before_updated_at,
+    });
+    return { row, before };
+  }
 
   async list<T extends Row = Row>(
     collection: string,
@@ -260,7 +320,9 @@ export class RecordStore {
        RETURNING id, data, created_at, updated_at`,
       [this.tenantId, collection, JSON.stringify(clean(data))],
     );
-    return toRow(row) as T;
+    const created = toRow(row);
+    this.track(collection, null, created);
+    return created as T;
   }
 
   async insertMany(collection: string, items: Record<string, unknown>[]) {
@@ -271,7 +333,9 @@ export class RecordStore {
        RETURNING id, data, created_at, updated_at`,
       [this.tenantId, collection, JSON.stringify(items.map(clean))],
     );
-    return rows.map(toRow);
+    const created = rows.map(toRow);
+    for (const r of created) this.track(collection, null, r);
+    return created;
   }
 
   /** Shallow merge, like the mock's `{ ...existing, ...patch }`. */
@@ -280,30 +344,20 @@ export class RecordStore {
     id: string,
     patch: Record<string, unknown>,
   ): Promise<T> {
-    const [row] = returned<DbRow>(
-      await this.em.query(
-        `UPDATE product_records SET data = data || $4::jsonb, updated_at = now()
-       WHERE tenant_id = $1 AND collection = $2 AND id = $3
-       RETURNING id, data, created_at, updated_at`,
-        [this.tenantId, collection, id, JSON.stringify(clean(patch))],
-      ),
-    );
-    if (!row) throw new NotFoundException(label(collection));
-    return toRow(row) as T;
+    const res = await this.update(collection, id, 'data || $4::jsonb', patch);
+    if (!res) throw new NotFoundException(label(collection));
+    const after = toRow(res.row);
+    if (res.before) this.track(collection, res.before, after);
+    return after as T;
   }
 
   /** Writes the full data object (used when a handler rebuilt the row). */
   async replace<T extends Row = Row>(collection: string, row: Row): Promise<T> {
-    const [updated] = returned<DbRow>(
-      await this.em.query(
-        `UPDATE product_records SET data = $4::jsonb, updated_at = now()
-       WHERE tenant_id = $1 AND collection = $2 AND id = $3
-       RETURNING id, data, created_at, updated_at`,
-        [this.tenantId, collection, row.id, JSON.stringify(clean(row))],
-      ),
-    );
-    if (!updated) throw new NotFoundException(label(collection));
-    return toRow(updated) as T;
+    const res = await this.update(collection, row.id, '$4::jsonb', row);
+    if (!res) throw new NotFoundException(label(collection));
+    const after = toRow(res.row);
+    if (res.before) this.track(collection, res.before, after);
+    return after as T;
   }
 
   async remove(collection: string, id: string): Promise<void> {

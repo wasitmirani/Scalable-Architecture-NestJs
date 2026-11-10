@@ -27,6 +27,14 @@ export function validateEnv(
   if (get('NODE_ENV') === 'production' && !get('MAIL_HOST')) {
     errors.push('MAIL_HOST must be set in production');
   }
+  if (
+    get('NODE_ENV') === 'production' &&
+    get('SECRETS_ENCRYPTION_KEY').length < 32
+  ) {
+    errors.push(
+      'SECRETS_ENCRYPTION_KEY must be set and at least 32 characters long (encrypts provider credentials)',
+    );
+  }
 
   if (errors.length > 0) {
     throw new Error(

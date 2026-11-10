@@ -240,6 +240,13 @@ export interface WorkflowExecution extends Entity {
   /** Path ids chosen at each branch, so the run can resume and be highlighted. */
   pathChoices: Record<string, string>;
   log: RunLogEntry[];
+  /**
+   * Backend only: the event a live "Wait for event" step is waiting for
+   * (`email_opened`, `tag_added`…). Cleared when the run moves on.
+   */
+  waitingFor?: string | null;
+  /** Backend only: the real trigger values, reused when the run resumes. */
+  triggerData?: Record<string, string>;
 }
 
 export interface WorkflowRunStats {

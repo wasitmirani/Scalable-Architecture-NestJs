@@ -19,6 +19,7 @@ import { ApiResponse } from '../../common/utils/api.response';
 import type { HookContext } from '../records/collection.types';
 import { text } from '../records/record-store';
 import { RecordsService } from '../records/records.service';
+import { DeliveryService } from '../delivery/delivery.service';
 import { MessagingService, providerNotConnected } from './messaging.service';
 
 /** Campaigns, templates, message log and brand kit actions (Phases 4–9). */
@@ -29,6 +30,7 @@ export class MessagingController {
   constructor(
     private readonly records: RecordsService,
     private readonly messaging: MessagingService,
+    private readonly delivery: DeliveryService,
   ) {}
 
   private run<T>(
@@ -134,12 +136,26 @@ export class MessagingController {
   @HttpCode(200)
   testCampaign(
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { recipients?: unknown },
     @CurrentTenant() t: TenantContext,
     @CurrentPrincipal() p: Principal,
   ) {
     return this.run(t, p, 'campaigns.send', async (ctx) => {
       const campaign = await ctx.store.find('campaigns', id);
-      throw providerNotConnected(text(campaign.channel) || 'messages');
+      if (campaign.channel !== 'email')
+        throw providerNotConnected(text(campaign.channel) || 'messages');
+      const template = campaign.templateId
+        ? await ctx.store.findOrNull('templates', text(campaign.templateId))
+        : null;
+      const recipients = Array.isArray(body?.recipients)
+        ? body.recipients.filter((r): r is string => typeof r === 'string')
+        : [];
+      return this.delivery.sendTest(
+        ctx,
+        recipients,
+        { template, subject: text(campaign.subject), previewText: text(campaign.previewText), body: text(campaign.body) },
+        campaign,
+      );
     });
   }
 
@@ -174,12 +190,17 @@ export class MessagingController {
   @HttpCode(200)
   testTemplate(
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { to?: unknown },
     @CurrentTenant() t: TenantContext,
     @CurrentPrincipal() p: Principal,
   ) {
     return this.run(t, p, 'templates.manage', async (ctx) => {
       const template = await ctx.store.find('templates', id);
-      throw providerNotConnected(text(template.channel) || 'messages');
+      if (template.channel !== 'email')
+        throw providerNotConnected(text(template.channel) || 'messages');
+      const to = typeof body?.to === 'string' ? body.to : '';
+      await this.delivery.sendTest(ctx, [to], { template }, null);
+      return { to };
     });
   }
 

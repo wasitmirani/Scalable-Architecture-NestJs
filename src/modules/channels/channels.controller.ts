@@ -15,7 +15,8 @@ import {
 import type { Principal, TenantContext } from '../../common/types/principal';
 import { ApiResponse } from '../../common/utils/api.response';
 import type { HookContext } from '../records/collection.types';
-import { RecordsService } from '../records/records.service';
+import { publicRow, RecordsService } from '../records/records.service';
+import { checkStoredAccount } from './channel-accounts';
 
 interface DnsRecord {
   type: 'TXT' | 'CNAME' | 'MX';
@@ -165,10 +166,7 @@ export class ChannelsController {
     );
   }
 
-  /**
-   * Provider health check. Provider APIs are not connected yet, so this records
-   * the check time and returns the account as stored.
-   */
+  /** Provider health check: verifies the stored credentials with the provider. */
   @Post('channel-accounts/:id/check')
   @HttpCode(200)
   async check(
@@ -181,10 +179,17 @@ export class ChannelsController {
         tenant,
         principal,
         'channels.manage',
-        (ctx: HookContext) =>
-          ctx.store.patch('channel-accounts', id, {
+        async (ctx: HookContext) => {
+          const account = await ctx.store.find('channel-accounts', id);
+          const result = await checkStoredAccount(account);
+          const updated = await ctx.store.patch('channel-accounts', id, {
+            status: result.ok ? 'connected' : 'error',
+            statusDetail: result.ok ? null : result.detail,
             lastCheckedAt: new Date().toISOString(),
-          }),
+            ...(result.info?.quality ? { quality: result.info.quality } : {}),
+          });
+          return publicRow(updated);
+        },
       ),
     );
   }

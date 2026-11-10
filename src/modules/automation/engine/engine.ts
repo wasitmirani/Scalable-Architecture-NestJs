@@ -322,6 +322,11 @@ export interface ExecuteOptions {
    * webhook…). Without it the engine uses sample values, as the builder preview does.
    */
   trigger?: Record<string, string>;
+  /**
+   * Backend addition: "Wait for event" waits for the real event (resumed by the
+   * trigger dispatcher) instead of the demo's simulated outcome.
+   */
+  liveEvents?: boolean;
 }
 
 type RunState = Pick<
@@ -336,6 +341,7 @@ type RunState = Pick<
   | 'variables'
   | 'pathChoices'
   | 'log'
+  | 'waitingFor'
 >;
 
 /** Runs a definition for one contact until it finishes, waits or fails. */
@@ -400,6 +406,7 @@ export function execute(
     variables: ctx.vars,
     pathChoices,
     log,
+    waitingFor: null,
     ...extra,
   });
 
@@ -544,6 +551,23 @@ export function execute(
         const timeoutMs =
           Number(s.config.timeoutAmount || 0) *
           (UNIT_MS[s.config.timeoutUnit] ?? UNIT_MS.days);
+        if (opts.liveEvents) {
+          // Live: assume a timeout; the trigger dispatcher switches to the
+          // "happened" path and resumes the run when the real event arrives.
+          pathChoices[s.id] = timedOut?.id ?? '';
+          entry(
+            s.id,
+            s.type,
+            label,
+            'waiting',
+            `Waiting up to ${s.config.timeoutAmount} ${s.config.timeoutUnit} until the contact ${event}`,
+            2,
+          );
+          return done('waiting', s, {
+            resumeAt: new Date(clock + timeoutMs).toISOString(),
+            waitingFor: s.config.event,
+          });
+        }
         // Demo: about half of contacts do the event, at a random point before the timeout.
         const roll = hash(`${contact?.id ?? 'x'}:${s.id}:event`) % 100;
         const occurs = roll < 55;

@@ -23,6 +23,7 @@ import { AutomationService } from './automation.service';
 import type { Contact } from './engine/engine';
 import type { Workflow } from './engine/types';
 import { flattenPayload, samplePayloadValues } from './engine/workflow';
+import { contactCapacity } from '../platform/plan-limits';
 
 const MAX_BODY_BYTES = 256 * 1024;
 const RATE_LIMIT = 120; // requests per token per minute
@@ -170,7 +171,13 @@ export class WorkflowHooksController {
 
       const by = config.matchBy ?? 'email';
       let contact = await this.automation.findContact(ctx, by, identifier);
-      if (!contact && config.createContact === 'true' && by !== 'id') {
+      // A full plan accepts the request but creates nobody (the sender should not retry).
+      if (
+        !contact &&
+        config.createContact === 'true' &&
+        by !== 'id' &&
+        (await contactCapacity(ctx)) > 0
+      ) {
         contact = await ctx.store.insert<Row & Contact>(
           'contacts',
           contactDefaults({

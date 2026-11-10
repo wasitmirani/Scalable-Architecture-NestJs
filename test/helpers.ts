@@ -68,7 +68,37 @@ export function uniqueEmail(label: string): string {
   return `${label}.${Date.now().toString(36)}${counter}@example.test`;
 }
 
+/**
+ * Registers a user with a new workspace. Workspaces start on Free; tests that are
+ * not about plan limits move to Business so Free limits (1 seat, 2 automations…)
+ * do not get in the way. Pass `plan: 'free'` to keep Free.
+ */
 export async function registerAccount(
+  app: INestApplication<App>,
+  label: string,
+  options: { plan?: 'free' | 'starter' | 'business' } = {},
+): Promise<TestAccount> {
+  const account = await registerOnly(app, label);
+  const plan = options.plan ?? 'business';
+  if (plan !== 'free') {
+    await request(app.getHttpServer())
+      .post('/api/v1/billing/subscription')
+      .set({
+        Authorization: `Bearer ${account.accessToken}`,
+        'X-Tenant-Id': account.tenantId,
+      })
+      .send({ planId: plan, cycle: 'monthly' })
+      .expect((res) => {
+        if (res.status >= 300)
+          throw new Error(
+            `Plan change failed: ${res.status} ${JSON.stringify(res.body)}`,
+          );
+      });
+  }
+  return account;
+}
+
+async function registerOnly(
   app: INestApplication<App>,
   label: string,
 ): Promise<TestAccount> {

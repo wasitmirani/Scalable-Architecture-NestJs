@@ -8,6 +8,7 @@ import {
 } from '../records/record-store';
 import { publicRow } from '../records/records.service';
 import { newWebhookSecret } from './platform.collections';
+import { assertFitsPlan, emailUsage, ENTITLEMENTS } from './plan-limits';
 
 export const PLANS = [
   {
@@ -169,7 +170,15 @@ export class PlatformService {
       [ctx.store.tenantId, periodStart],
     );
     const n = (v: string) => Number(v) || 0;
+    const limits = ENTITLEMENTS[plan.id];
+    const emails = await emailUsage(ctx);
     return {
+      /** What the plan includes; the UI shows locks and upgrade prompts from this. */
+      entitlements: {
+        ...limits,
+        emailsThisMonth: emails.month,
+        emailsToday: emails.day,
+      },
       planId: row.planId,
       cycle: row.cycle,
       status: row.status,
@@ -251,6 +260,8 @@ export class PlatformService {
       );
     }
     const row = await this.subscriptionRow(ctx);
+    // A downgrade must fit what the workspace already uses (contacts, seats, live automations).
+    await assertFitsPlan(ctx, plan.id as PlanId);
     await ctx.store.patch('billing/subscription', row.id, {
       planId: plan.id as PlanId,
       cycle,

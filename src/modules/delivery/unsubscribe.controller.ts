@@ -1,4 +1,12 @@
-import { Controller, Get, HttpCode, Param, Post, Res, VERSION_NEUTRAL } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Res,
+  VERSION_NEUTRAL,
+} from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { DataSource } from 'typeorm';
@@ -33,7 +41,10 @@ export class UnsubscribeController {
   ) {}
 
   private async workspaceName(tenantId: string) {
-    const [row] = await this.dataSource.query<{ name: string }[]>(`SELECT name FROM tenants WHERE id = $1`, [tenantId]);
+    const [row] = await this.dataSource.query<{ name: string }[]>(
+      `SELECT name FROM tenants WHERE id = $1`,
+      [tenantId],
+    );
     return row?.name ?? null;
   }
 
@@ -43,7 +54,15 @@ export class UnsubscribeController {
     const name = who && (await this.workspaceName(who.tenantId));
     res.setHeader('Cache-Control', 'no-store');
     if (!who || !name) {
-      res.status(404).type('html').send(page('Link not valid', '<h1>This link is not valid</h1><p>It may have been copied incompletely.</p>'));
+      res
+        .status(404)
+        .type('html')
+        .send(
+          page(
+            'Link not valid',
+            '<h1>This link is not valid</h1><p>It may have been copied incompletely.</p>',
+          ),
+        );
       return;
     }
     res.type('html').send(
@@ -61,17 +80,28 @@ export class UnsubscribeController {
     const who = readUnsubscribeToken(token);
     const name = who && (await this.workspaceName(who.tenantId));
     if (!who || !name) {
-      res.status(404).type('html').send(page('Link not valid', '<h1>This link is not valid</h1>'));
+      res
+        .status(404)
+        .type('html')
+        .send(page('Link not valid', '<h1>This link is not valid</h1>'));
       return;
     }
-    const tenant = { tenantId: who.tenantId, memberId: null, roleKey: null, permissions: new Set<string>() };
+    const tenant = {
+      tenantId: who.tenantId,
+      memberId: null,
+      roleKey: null,
+      permissions: new Set<string>(),
+    };
     await this.records.run(tenant, 'Unsubscribe link', async (ctx) => {
       const contact = await ctx.store.findOrNull('contacts', who.contactId);
       if (!contact) return;
       const consents = (contact.consents ?? {}) as Record<string, string>;
       if (consents.email === 'unsubscribed') return; // idempotent: mail clients may retry
       const at = new Date().toISOString();
-      await ctx.store.patch('contacts', contact.id, { consents: { ...consents, email: 'unsubscribed' }, lastActivityAt: at });
+      await ctx.store.patch('contacts', contact.id, {
+        consents: { ...consents, email: 'unsubscribed' },
+        lastActivityAt: at,
+      });
       await ctx.store.insert('activities', {
         contactId: contact.id,
         type: 'unsubscribed',
@@ -83,6 +113,13 @@ export class UnsubscribeController {
       });
     });
     res.setHeader('Cache-Control', 'no-store');
-    res.type('html').send(page('Unsubscribed', `<h1>You are unsubscribed</h1><p>You will no longer receive marketing emails from ${escapeHtml(name)}.</p>`));
+    res
+      .type('html')
+      .send(
+        page(
+          'Unsubscribed',
+          `<h1>You are unsubscribed</h1><p>You will no longer receive marketing emails from ${escapeHtml(name)}.</p>`,
+        ),
+      );
   }
 }

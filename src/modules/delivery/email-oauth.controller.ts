@@ -25,7 +25,17 @@ import { publicApiUrl } from './unsubscribe-token';
 
 type OAuthProvider = 'gmail' | 'outlook';
 
-const CONFIG: Record<OAuthProvider, { env: string; label: string; authorize: string; token: string; scope: string; extra: Record<string, string> }> = {
+const CONFIG: Record<
+  OAuthProvider,
+  {
+    env: string;
+    label: string;
+    authorize: string;
+    token: string;
+    scope: string;
+    extra: Record<string, string>;
+  }
+> = {
   gmail: {
     env: 'GOOGLE',
     label: 'Gmail',
@@ -39,7 +49,8 @@ const CONFIG: Record<OAuthProvider, { env: string; label: string; authorize: str
     label: 'Outlook',
     authorize: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
     token: MICROSOFT_TOKEN_URL,
-    scope: 'openid email profile offline_access https://outlook.office.com/SMTP.Send',
+    scope:
+      'openid email profile offline_access https://outlook.office.com/SMTP.Send',
     extra: { response_mode: 'query', prompt: 'select_account' },
   },
 };
@@ -56,8 +67,11 @@ function app(p: OAuthProvider) {
   return id && secret ? { id, secret } : null;
 }
 
-const redirectUri = (p: OAuthProvider) => `${publicApiUrl()}/oauth/email/${p}/callback`;
-const stateKey = () => process.env.SECRETS_ENCRYPTION_KEY || `linqflow-dev-oauth:${process.env.JWT_SECRET ?? ''}`;
+const redirectUri = (p: OAuthProvider) =>
+  `${publicApiUrl()}/oauth/email/${p}/callback`;
+const stateKey = () =>
+  process.env.SECRETS_ENCRYPTION_KEY ||
+  `linqflow-dev-oauth:${process.env.JWT_SECRET ?? ''}`;
 
 interface State {
   t: string; // tenant
@@ -75,17 +89,27 @@ function signState(s: State) {
 function readState(raw: string): State | null {
   const [body, sig] = raw.split('.');
   if (!body || !sig) return null;
-  const expected = Buffer.from(createHmac('sha256', stateKey()).update(body).digest('base64url'));
-  if (expected.length !== Buffer.from(sig).length || !timingSafeEqual(expected, Buffer.from(sig))) return null;
-  const s = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as State;
+  const expected = Buffer.from(
+    createHmac('sha256', stateKey()).update(body).digest('base64url'),
+  );
+  if (
+    expected.length !== Buffer.from(sig).length ||
+    !timingSafeEqual(expected, Buffer.from(sig))
+  )
+    return null;
+  const s = JSON.parse(
+    Buffer.from(body, 'base64url').toString('utf8'),
+  ) as State;
   return s.e > Date.now() ? s : null;
 }
 
 /** Email address from the id_token returned by the token endpoint (received directly over TLS). */
 function emailFromIdToken(idToken: unknown): string {
-  const [, payload] = String(idToken ?? '').split('.');
+  const [, payload] = typeof idToken === 'string' ? idToken : ''.split('.');
   if (!payload) return '';
-  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
+  const claims = JSON.parse(
+    Buffer.from(payload, 'base64url').toString('utf8'),
+  ) as Record<string, unknown>;
   return text(claims.email || claims.preferred_username).toLowerCase();
 }
 
@@ -104,13 +128,19 @@ export class EmailOAuthStartController {
   /** `POST /api/v1/channel-accounts/oauth/:provider/start` → `{ url }` to open. */
   @Post('channel-accounts/oauth/:provider/start')
   @HttpCode(200)
-  async start(
+  start(
     @Param('provider') provider: string,
     @Body() body: { name?: unknown },
     @CurrentTenant() t: TenantContext,
   ) {
     this.records.assertCan(t, 'channels.manage');
-    if (!isProvider(provider)) throw fieldError(422, 'INVALID_PROVIDER', 'provider', 'Use gmail or outlook');
+    if (!isProvider(provider))
+      throw fieldError(
+        422,
+        'INVALID_PROVIDER',
+        'provider',
+        'Use gmail or outlook',
+      );
     const creds = app(provider);
     if (!creds) {
       throw fieldError(
@@ -123,7 +153,9 @@ export class EmailOAuthStartController {
     const state = signState({
       t: t.tenantId,
       p: provider,
-      n: text(body?.name).trim().slice(0, 80) || `${CONFIG[provider].label} account`,
+      n:
+        text(body?.name).trim().slice(0, 80) ||
+        `${CONFIG[provider].label} account`,
       e: Date.now() + STATE_TTL_MS,
       r: randomBytes(8).toString('hex'),
     });
@@ -155,12 +187,20 @@ export class EmailOAuthCallbackController {
     @Res() res: Response,
   ) {
     const back = (params: Record<string, string>) =>
-      res.redirect(`${(process.env.FRONTEND_URL ?? '').replace(/\/$/, '')}/channels/email?${new URLSearchParams(params).toString()}`);
+      res.redirect(
+        `${(process.env.FRONTEND_URL ?? '').replace(/\/$/, '')}/channels/email?${new URLSearchParams(params).toString()}`,
+      );
     const state = q.state ? readState(q.state) : null;
-    if (!isProvider(provider) || !state || state.p !== provider) return back({ oauth_error: 'The sign-in link expired. Try connecting again.' });
+    if (!isProvider(provider) || !state || state.p !== provider)
+      return back({
+        oauth_error: 'The sign-in link expired. Try connecting again.',
+      });
     if (q.error) return back({ oauth_error: q.error_description || q.error });
     const creds = app(provider);
-    if (!creds || !q.code) return back({ oauth_error: 'Sign-in did not return an authorization code.' });
+    if (!creds || !q.code)
+      return back({
+        oauth_error: 'Sign-in did not return an authorization code.',
+      });
 
     try {
       const tokenRes = await fetch(CONFIG[provider].token, {
@@ -177,26 +217,52 @@ export class EmailOAuthCallbackController {
         signal: AbortSignal.timeout(15_000),
       });
       const tokens = (await tokenRes.json()) as Record<string, unknown>;
-      if (!tokenRes.ok) return back({ oauth_error: text(tokens.error_description || tokens.error) || 'Token exchange failed.' });
+      if (!tokenRes.ok)
+        return back({
+          oauth_error:
+            text(tokens.error_description || tokens.error) ||
+            'Token exchange failed.',
+        });
       const refreshToken = text(tokens.refresh_token);
       const email = emailFromIdToken(tokens.id_token);
-      if (!refreshToken || !email) return back({ oauth_error: 'The provider did not grant offline access. Try again and accept all permissions.' });
-
-      const tenant = { tenantId: state.t, memberId: null, roleKey: null, permissions: new Set<string>() };
-      await this.records.run(tenant, `${CONFIG[provider].label} sign-in`, async (ctx) => {
-        const data = await channelAccountsCollection.beforeCreate!(ctx, {
-          channel: 'email',
-          provider: CONFIG[provider].label,
-          name: state.n,
-          identifier: email,
-          credentials: { email, refreshToken },
+      if (!refreshToken || !email)
+        return back({
+          oauth_error:
+            'The provider did not grant offline access. Try again and accept all permissions.',
         });
-        await ctx.store.insert('channel-accounts', data);
-      });
+
+      const tenant = {
+        tenantId: state.t,
+        memberId: null,
+        roleKey: null,
+        permissions: new Set<string>(),
+      };
+      await this.records.run(
+        tenant,
+        `${CONFIG[provider].label} sign-in`,
+        async (ctx) => {
+          const data = await channelAccountsCollection.beforeCreate!(ctx, {
+            channel: 'email',
+            provider: CONFIG[provider].label,
+            name: state.n,
+            identifier: email,
+            credentials: { email, refreshToken },
+          });
+          await ctx.store.insert('channel-accounts', data);
+        },
+      );
       return back({ connected: provider, account: email });
     } catch (error) {
-      const e = error as { response?: { data?: { details?: { errors?: string[] }[]; message?: string } }; message?: string };
-      return back({ oauth_error: e?.response?.data?.message ?? e?.message ?? 'Connecting failed.' });
+      const e = error as {
+        response?: {
+          data?: { details?: { errors?: string[] }[]; message?: string };
+        };
+        message?: string;
+      };
+      return back({
+        oauth_error:
+          e?.response?.data?.message ?? e?.message ?? 'Connecting failed.',
+      });
     }
   }
 }

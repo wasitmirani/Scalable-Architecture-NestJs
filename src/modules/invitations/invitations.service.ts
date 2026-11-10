@@ -20,6 +20,7 @@ import { MailService } from '../mail/mail.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { CreateInvitationDto } from './dto/invitation.dto';
 import { Invitation } from './entities/invitation.entity';
+import { assertSeat } from '../platform/plan-limits';
 
 const INVITATION_TTL_MS = 7 * 24 * 3_600_000;
 
@@ -88,6 +89,7 @@ export class InvitationsService {
           'An invitation is already pending for this email',
           'INVITATION_PENDING',
         );
+      await assertSeat(em, tenant.tenantId);
 
       const { identifiers } = await em.insert(Invitation, {
         tenantId: tenant.tenantId,

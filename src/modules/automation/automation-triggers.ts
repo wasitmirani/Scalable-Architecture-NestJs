@@ -5,6 +5,7 @@
  * Pure functions only (no database); AutomationService wires them to the store.
  */
 import type { Row, StoreChange } from '../records/record-store';
+import { str } from '../delivery/providers';
 import type { TriggerType, WorkflowDefinition } from './engine/types';
 
 /** Something that happened to one contact that automations may react to. */
@@ -122,13 +123,20 @@ export function eventsFromChanges(
         events.push({
           type: 'contact_created',
           contactId,
-          values: { source: String(after.source ?? '') },
+          values: { source: str(after.source) },
         });
       }
-      const hadTags = new Set(strings(before?.tags).map((t) => t.toLowerCase()));
+      const hadTags = new Set(
+        strings(before?.tags).map((t) => t.toLowerCase()),
+      );
       for (const tag of strings(after.tags)) {
         if (!hadTags.has(tag.toLowerCase()))
-          events.push({ type: 'tag_added', contactId, key: tag, values: { tag } });
+          events.push({
+            type: 'tag_added',
+            contactId,
+            key: tag,
+            values: { tag },
+          });
       }
       const hadLists = new Set(strings(before?.listIds));
       for (const listId of strings(after.listIds)) {
@@ -141,11 +149,11 @@ export function eventsFromChanges(
           });
       }
     } else if (collection === 'deals' && before) {
-      const contactId = typeof after.contactId === 'string' ? after.contactId : '';
-      const stageId = String(after.stageId ?? '');
-      if (!contactId || !stageId || stageId === String(before.stageId ?? ''))
-        continue;
-      const stage = lookups.stageName(String(after.pipelineId ?? ''), stageId);
+      const contactId =
+        typeof after.contactId === 'string' ? after.contactId : '';
+      const stageId = str(after.stageId);
+      if (!contactId || !stageId || stageId === str(before.stageId)) continue;
+      const stage = lookups.stageName(str(after.pipelineId), stageId);
       events.push({
         type: 'deal_stage_changed',
         contactId,
@@ -153,12 +161,12 @@ export function eventsFromChanges(
         values: {
           stage,
           previous_stage: lookups.stageName(
-            String(before.pipelineId ?? ''),
-            String(before.stageId ?? ''),
+            str(before.pipelineId),
+            str(before.stageId),
           ),
           deal_id: after.id,
-          deal_name: String(after.title ?? after.name ?? ''),
-          value: String(after.value ?? ''),
+          deal_name: str(after.title, str(after.name)),
+          value: str(after.value),
         },
       });
     }

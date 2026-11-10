@@ -4,6 +4,7 @@ import { ForbiddenException } from '../../common/exceptions/custom.exceptions';
 import type { Principal, TenantContext } from '../../common/types/principal';
 import { TenantDb } from '../../database/database.module';
 import { COLLECTIONS } from './collections.registry';
+import { assertFeature, type Feature } from '../platform/plan-limits';
 import type { CollectionDef, HookContext } from './collection.types';
 import {
   invalid,
@@ -15,7 +16,23 @@ import {
 } from './record-store';
 
 const SEEDED = '_seeded';
+
+/** Resources a plan must include before new rows can be created (see plan-limits.ts). */
+const PLAN_GATES: Partial<Record<string, Feature>> = {
+  segments: 'segments',
+  companies: 'salesCrm',
+  deals: 'salesCrm',
+  pipelines: 'salesCrm',
+  tasks: 'salesCrm',
+  calls: 'voice',
+  'ivr-menus': 'voice',
+};
 const MAX_CHANGE_DEPTH = 4;
+
+export type CommitListener = (
+  tenantId: string,
+  touched: Map<string, Set<string> | null>,
+) => Promise<void> | void;
 
 export type ChangeListener = (
   ctx: HookContext,
@@ -30,6 +47,7 @@ const BY_PATH = [...COLLECTIONS].sort((a, b) => b.path.length - a.path.length);
 export class RecordsService {
   private readonly logger = new Logger(RecordsService.name);
   private readonly listeners: ChangeListener[] = [];
+  private readonly commitListeners: CommitListener[] = [];
 
   constructor(
     private readonly dataSource: DataSource,
@@ -89,22 +107,39 @@ export class RecordsService {
     this.listeners.push(listener);
   }
 
+  /**
+   * Registers a listener called after a unit of work commits, with every
+   * collection and row it wrote (realtime events). Errors are logged, never thrown.
+   */
+  onCommit(listener: CommitListener) {
+    this.commitListeners.push(listener);
+  }
+
   /** Runs work in one tenant transaction with a store and hook context. */
-  run<T>(
+  async run<T>(
     tenant: TenantContext,
     actorName: string,
     work: (ctx: HookContext) => Promise<T>,
   ): Promise<T> {
-    return this.tenantDb.run(tenant.tenantId, async (em) => {
-      const ctx = {
-        store: new RecordStore(em, tenant.tenantId),
-        tenant,
-        actorName,
-      };
-      const result = await work(ctx);
+    let store: RecordStore | null = null;
+    const result = await this.tenantDb.run(tenant.tenantId, async (em) => {
+      store = new RecordStore(em, tenant.tenantId);
+      const ctx = { store, tenant, actorName };
+      const out = await work(ctx);
       await this.drainChanges(ctx);
-      return result;
+      return out;
     });
+    // Committed: tell realtime listeners what changed (never fails the request).
+    const touched = (store as RecordStore | null)?.touched;
+    if (touched?.size) {
+      for (const listener of this.commitListeners) {
+        void Promise.resolve(listener(tenant.tenantId, touched)).catch(
+          (error: Error) =>
+            this.logger.warn(`Commit listener failed: ${error.message}`),
+        );
+      }
+    }
+    return result;
   }
 
   /**
@@ -190,6 +225,8 @@ export class RecordsService {
   }
 
   async create(ctx: HookContext, def: CollectionDef, body: unknown) {
+    const gate = PLAN_GATES[def.path];
+    if (gate) await assertFeature(ctx, gate);
     await this.ensureDefaults(ctx, def);
     const input = this.sanitize(def, body);
     const data = def.beforeCreate ? await def.beforeCreate(ctx, input) : input;

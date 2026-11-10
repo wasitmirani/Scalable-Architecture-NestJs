@@ -251,7 +251,10 @@ describe('Tenant isolation & access control (e2e)', () => {
       const lite = await http()
         .post('/api/v1/roles')
         .set(asUser(a))
-        .send({ name: 'Directory reader', permissions: ['tenant.read', 'members.read'] })
+        .send({
+          name: 'Directory reader',
+          permissions: ['tenant.read', 'members.read'],
+        })
         .expect(201);
       await http()
         .post('/api/v1/invitations')

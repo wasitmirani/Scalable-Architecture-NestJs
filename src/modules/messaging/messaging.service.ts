@@ -9,6 +9,10 @@ import {
 import { matchesSegment, type SegmentRuleGroup } from '../crm/segment-engine';
 import { EMPTY_STATS } from './messaging.collections';
 import { publicRow } from '../records/records.service';
+import { assertEmailQuota, assertFeature } from '../platform/plan-limits';
+import { open } from '../../common/crypto/secret-box';
+import { whatsappSubmitTemplate } from '../delivery/messaging-transport';
+import type { Credentials } from '../delivery/providers';
 
 interface Audience {
   listIds: string[];
@@ -51,6 +55,59 @@ export function providerNotConnected(channel: string) {
     },
     HttpStatus.CONFLICT,
   );
+}
+
+/** A template in Meta's message_templates format (header, body with examples, footer, buttons). */
+export function whatsappComponents(t: Row): Record<string, unknown>[] {
+  const wa = (t.whatsapp ?? {}) as {
+    headerType?: string;
+    header?: string;
+    footer?: string;
+    buttons?: { type: string; text: string; value?: string }[];
+  };
+  const examples = (t.examples ?? {}) as Record<string, string>;
+  const body = text(t.body);
+  const numbers = [
+    ...new Set([...body.matchAll(/{{\s*(\d+)\s*}}/g)].map((m) => Number(m[1]))),
+  ].sort((a, b) => a - b);
+  const components: Record<string, unknown>[] = [];
+  if (wa.headerType === 'text' && wa.header)
+    components.push({ type: 'HEADER', format: 'TEXT', text: wa.header });
+  if (wa.headerType === 'image' && wa.header)
+    components.push({
+      type: 'HEADER',
+      format: 'IMAGE',
+      example: { header_handle: [wa.header] },
+    });
+  components.push({
+    type: 'BODY',
+    text: body,
+    ...(numbers.length
+      ? {
+          example: {
+            body_text: [numbers.map((n) => examples[n] || `value ${n}`)],
+          },
+        }
+      : {}),
+  });
+  if (wa.footer) components.push({ type: 'FOOTER', text: wa.footer });
+  if (wa.buttons?.length) {
+    components.push({
+      type: 'BUTTONS',
+      buttons: wa.buttons.map((b) =>
+        b.type === 'url'
+          ? { type: 'URL', text: b.text, url: b.value ?? '' }
+          : b.type === 'phone'
+            ? {
+                type: 'PHONE_NUMBER',
+                text: b.text,
+                phone_number: b.value ?? '',
+              }
+            : { type: 'QUICK_REPLY', text: b.text },
+      ),
+    });
+  }
+  return components;
 }
 
 /** Same checks as the UI's campaignProblems(); the server re-validates on launch. */
@@ -153,6 +210,8 @@ export class MessagingService {
       );
     }
     // `due`: the delivery worker launches a scheduled campaign whose time has come.
+    if ((campaign.abTest as { enabled?: boolean } | null)?.enabled)
+      await assertFeature(ctx, 'abTesting');
     if (campaign.schedule?.type === 'scheduled' && !opts.due) {
       return this.transition(ctx, id, ['draft'], 'scheduled');
     }
@@ -164,6 +223,8 @@ export class MessagingService {
       campaign.audience,
       campaign.channel,
     );
+    if (campaign.channel === 'email')
+      await assertEmailQuota(ctx, reachable.length);
     const at = new Date().toISOString();
     const preview = (campaign.body ?? '')
       .replace(/<[^>]+>/g, ' ')
@@ -241,10 +302,59 @@ export class MessagingService {
     if (template.status === 'pending') {
       throw invalidState('This template is already waiting for approval.');
     }
-    return ctx.store.patch('templates', id, {
-      status: 'pending',
-      rejectionReason: null,
-    });
+    // Sent to Meta for review; the delivery worker polls the result (approved / rejected).
+    const [account] = (
+      await ctx.store.all('channel-accounts', { channel: 'whatsapp' })
+    ).filter(
+      (a) => a.status === 'connected' && typeof a._credentials === 'string',
+    );
+    if (!account)
+      throw providerNotConnected(
+        'WhatsApp (connect the WhatsApp Cloud API first)',
+      );
+    const metaName =
+      text(template.name)
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 512) || `template_${id.slice(0, 8)}`;
+    try {
+      const submitted = await whatsappSubmitTemplate(
+        open<Credentials>(text(account._credentials)),
+        {
+          name: metaName,
+          language: text(template.language) || 'en',
+          category: (['marketing', 'utility', 'authentication'].includes(
+            text(template.category),
+          )
+            ? text(template.category)
+            : 'marketing'
+          ).toUpperCase(),
+          components: whatsappComponents(template),
+        },
+      );
+      return publicRow(
+        await ctx.store.patch('templates', id, {
+          status:
+            submitted.status === 'APPROVED'
+              ? 'approved'
+              : submitted.status === 'REJECTED'
+                ? 'rejected'
+                : 'pending',
+          metaName,
+          metaId: submitted.id,
+          rejectionReason: null,
+        }),
+      );
+    } catch (error) {
+      throw fieldError(
+        422,
+        'META_REJECTED',
+        'template',
+        (error as Error).message,
+      );
+    }
   }
 
   async retryMessage(ctx: HookContext, id: string) {

@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AccessModule } from '../access/access.module';
+import { AuthModule } from '../auth/auth.module';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AutomationController } from '../automation/automation.controller';
 import { AutomationScheduler } from '../automation/automation.scheduler';
 import { AutomationService } from '../automation/automation.service';
@@ -11,6 +14,8 @@ import {
   EmailOAuthStartController,
 } from '../delivery/email-oauth.controller';
 import { UnsubscribeController } from '../delivery/unsubscribe.controller';
+import { ChannelWebhooksController } from '../delivery/channel-webhooks.controller';
+import { InboundService } from '../delivery/inbound.service';
 import { CrmController } from '../crm/crm.controller';
 import { CrmService } from '../crm/crm.service';
 import { InboxController } from '../inbox/inbox.controller';
@@ -26,6 +31,8 @@ import { RecordsService } from './records.service';
  * action routes match before RecordsController's catch-all standard resources.
  */
 @Module({
+  // Realtime verifies access tokens and workspace membership like the HTTP guard.
+  imports: [AuthModule, AccessModule],
   controllers: [
     CrmController,
     InboxController,
@@ -38,6 +45,7 @@ import { RecordsService } from './records.service';
     EmailOAuthStartController,
     EmailOAuthCallbackController,
     UnsubscribeController,
+    ChannelWebhooksController,
     // Must stay last.
     RecordsController,
   ],
@@ -49,6 +57,8 @@ import { RecordsService } from './records.service';
     AutomationService,
     AutomationScheduler,
     DeliveryService,
+    InboundService,
+    RealtimeService,
   ],
   exports: [RecordsService],
 })

@@ -153,7 +153,12 @@ export class MessagingController {
       return this.delivery.sendTest(
         ctx,
         recipients,
-        { template, subject: text(campaign.subject), previewText: text(campaign.previewText), body: text(campaign.body) },
+        {
+          template,
+          subject: text(campaign.subject),
+          previewText: text(campaign.previewText),
+          body: text(campaign.body),
+        },
         campaign,
       );
     });

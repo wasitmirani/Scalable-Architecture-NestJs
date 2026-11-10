@@ -18,6 +18,7 @@ import {
   type StoreChange,
 } from '../records/record-store';
 import { RecordsService } from '../records/records.service';
+import { assertAutomationSlot } from '../platform/plan-limits';
 import {
   DISPATCHED_TYPES,
   dateAttribute,
@@ -130,7 +131,10 @@ export class AutomationService implements OnModuleInit {
       listName: (id) => lists.get(id) ?? '',
       stageName: (pipelineId, stageId) => {
         const stages =
-          (pipelines.get(pipelineId)?.stages as { id: string; name: string }[]) ??
+          (pipelines.get(pipelineId)?.stages as {
+            id: string;
+            name: string;
+          }[]) ??
           [...pipelines.values()].flatMap(
             (p) => (p.stages as { id: string; name: string }[]) ?? [],
           );
@@ -157,7 +161,9 @@ export class AutomationService implements OnModuleInit {
     const result = { enrolled: 0, resumed: 0 };
     if (!events.length) return result;
 
-    const live = (await ctx.store.all<WorkflowRow>('workflows', { status: 'active' }))
+    const live = (
+      await ctx.store.all<WorkflowRow>('workflows', { status: 'active' })
+    )
       .map((w) => ({ w, def: this.liveDefinition(w, w.version) }))
       .filter(
         (x): x is { w: WorkflowRow; def: WorkflowDefinition } =>
@@ -167,9 +173,9 @@ export class AutomationService implements OnModuleInit {
 
     const waits = new Set(events.map(waitEventOf).filter(Boolean));
     const waiting = waits.size
-      ? (await ctx.store.all<RunRow>(RUNS, { status: 'waiting', test: false })).filter(
-          (r) => r.waitingFor && waits.has(r.waitingFor),
-        )
+      ? (
+          await ctx.store.all<RunRow>(RUNS, { status: 'waiting', test: false })
+        ).filter((r) => r.waitingFor && waits.has(r.waitingFor))
       : [];
     if (!live.length && !waiting.length) return result;
 
@@ -198,9 +204,13 @@ export class AutomationService implements OnModuleInit {
       if (!wait) continue;
       for (const r of waiting) {
         if (r.contactId !== event.contactId || r.waitingFor !== wait) continue;
-        const w = await ctx.store.findOrNull<WorkflowRow>('workflows', r.workflowId);
+        const w = await ctx.store.findOrNull<WorkflowRow>(
+          'workflows',
+          r.workflowId,
+        );
         const def = w && this.liveDefinition(w, r.version);
-        const step = def && r.currentStepId ? findStep(def.steps, r.currentStepId) : null;
+        const step =
+          def && r.currentStepId ? findStep(def.steps, r.currentStepId) : null;
         const happened = step?.paths?.[0]?.id;
         if (!happened) continue;
         await ctx.store.patch(RUNS, r.id, {
@@ -227,9 +237,15 @@ export class AutomationService implements OnModuleInit {
   async dateTriggers(ctx: HookContext, today = new Date()) {
     const md = today.toISOString().slice(5, 10);
     const year = today.toISOString().slice(0, 4);
-    const workflows = (await ctx.store.all<WorkflowRow>('workflows', { status: 'active' }))
+    const workflows = (
+      await ctx.store.all<WorkflowRow>('workflows', { status: 'active' })
+    )
       .map((w) => ({ w, def: this.liveDefinition(w, w.version) }))
-      .filter((x) => x.def?.trigger.type === 'date_attribute' && x.def.trigger.config.attribute);
+      .filter(
+        (x) =>
+          x.def?.trigger.type === 'date_attribute' &&
+          x.def.trigger.config.attribute,
+      );
     if (!workflows.length) return 0;
     const contacts = await ctx.store.all<Row & Contact>('contacts');
     let enrolled = 0;
@@ -250,7 +266,11 @@ export class AutomationService implements OnModuleInit {
           ctx,
           w,
           c,
-          { attribute, date: String(dateAttribute(c, attribute)), occurred_at: today.toISOString() },
+          {
+            attribute,
+            date: String(dateAttribute(c, attribute)),
+            occurred_at: today.toISOString(),
+          },
           { ignoreReentry: true },
         );
         if (run) enrolled++;
@@ -436,6 +456,7 @@ export class AutomationService implements OnModuleInit {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
+    await assertAutomationSlot(ctx, id);
     const version = (w.version ?? 0) + 1;
     return upgrade(
       await ctx.store.patch('workflows', id, {
@@ -476,6 +497,7 @@ export class AutomationService implements OnModuleInit {
         HttpStatus.CONFLICT,
       );
     }
+    await assertAutomationSlot(ctx, id);
     const updated = upgrade(
       await ctx.store.patch('workflows', id, { status: 'active' }),
     );

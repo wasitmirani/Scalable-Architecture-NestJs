@@ -28,11 +28,14 @@ export function readUnsubscribeToken(
   if (!tenantId || !contactId || !given) return null;
   const expected = Buffer.from(sig(tenantId, contactId));
   const actual = Buffer.from(given);
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
+    return null;
   return { tenantId, contactId };
 }
 
 /** Public base URL of this API (links in emails, OAuth callbacks). */
 export function publicApiUrl() {
-  return (process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 8888}`).replace(/\/$/, '');
+  return (
+    process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 8888}`
+  ).replace(/\/$/, '');
 }

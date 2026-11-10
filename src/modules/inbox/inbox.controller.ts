@@ -182,12 +182,35 @@ export class InboxController {
       kind,
       body: message,
       authorName: ctx.actorName,
-      // Delivery needs the channel provider; until it reports back the reply is queued.
-      status: kind === 'note' ? null : 'queued',
+      // The delivery worker sends the reply and moves this to sent / delivered / read / failed.
+      status: kind === 'note' ? null : 'sending',
       attachments: kind === 'note' ? [] : attachments,
       at,
     });
     if (kind === 'message') {
+      await ctx.store.insert('messages', {
+        channel: conversation.channel,
+        direction: 'outbound',
+        to: text(conversation.contactHandle) || null,
+        from: ctx.actorName,
+        contactId: conversation.contactId ?? null,
+        contactName: conversation.contactName ?? null,
+        subject:
+          conversation.channel === 'email'
+            ? `Re: ${text(conversation.subject) || 'Your message'}`
+            : null,
+        preview: message.slice(0, 140),
+        body: message,
+        conversationMessageId: created.id,
+        status: 'queued',
+        provider: 'unassigned',
+        campaignId: null,
+        campaignName: null,
+        errorCode: null,
+        events: [
+          { status: 'queued', at, detail: `Inbox reply by ${ctx.actorName}` },
+        ],
+      });
       await ctx.store.patch('conversations', id, {
         lastMessagePreview: message.slice(0, 200),
         lastMessageAt: at,

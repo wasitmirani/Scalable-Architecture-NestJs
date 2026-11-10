@@ -6,7 +6,16 @@
 
 export interface EmailBlock {
   id: string;
-  type: 'heading' | 'text' | 'button' | 'image' | 'divider' | 'spacer' | 'social' | 'footer' | 'html';
+  type:
+    | 'heading'
+    | 'text'
+    | 'button'
+    | 'image'
+    | 'divider'
+    | 'spacer'
+    | 'social'
+    | 'footer'
+    | 'html';
   content: string;
   href?: string;
   align?: 'left' | 'center' | 'right';
@@ -32,8 +41,20 @@ export interface EmailDesign {
   radius: number;
 }
 
-export const DEFAULT_DESIGN: EmailDesign = { accent: '#4f46e5', background: '#f1f5f9', paper: '#ffffff', text: '#1f2937', font: 'Inter', radius: 8 };
-const PADDING_PX = { none: '0', sm: '6px 24px', md: '14px 24px', lg: '24px 32px' } as const;
+export const DEFAULT_DESIGN: EmailDesign = {
+  accent: '#4f46e5',
+  background: '#f1f5f9',
+  paper: '#ffffff',
+  text: '#1f2937',
+  font: 'Inter',
+  radius: 8,
+};
+const PADDING_PX = {
+  none: '0',
+  sm: '6px 24px',
+  md: '14px 24px',
+  lg: '24px 32px',
+} as const;
 const SOCIAL_NETWORKS = [
   { key: 'facebook', label: 'Facebook' },
   { key: 'instagram', label: 'Instagram' },
@@ -44,7 +65,11 @@ const SOCIAL_NETWORKS = [
 const HEADING = { 1: 26, 2: 21, 3: 17 } as const;
 
 export const escapeHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 const nl = (s: string) => escapeHtml(s).replace(/\n/g, '<br />');
 
 function cell(b: EmailBlock, d: EmailDesign): string {
@@ -65,7 +90,10 @@ function cell(b: EmailBlock, d: EmailDesign): string {
       return `<div style="height:${b.height ?? 24}px;line-height:${b.height ?? 24}px">&nbsp;</div>`;
     case 'social':
       return SOCIAL_NETWORKS.filter((n) => b.links?.[n.key])
-        .map((n) => `<a href="${escapeHtml(b.links![n.key]!)}" style="color:${b.color ?? '#6b7280'};text-decoration:none;margin:0 6px">${n.label}</a>`)
+        .map(
+          (n) =>
+            `<a href="${escapeHtml(b.links![n.key]!)}" style="color:${b.color ?? '#6b7280'};text-decoration:none;margin:0 6px">${n.label}</a>`,
+        )
         .join(' ');
     case 'footer':
       return `<p style="margin:0;font-size:12px;line-height:1.5;color:${b.color ?? '#6b7280'}">${nl(b.content).replace(/\{\{\s*unsubscribe_url\s*\}\}/g, '<a href="{{unsubscribe_url}}" style="color:inherit">Unsubscribe</a>')}</p>`;
@@ -77,10 +105,18 @@ function cell(b: EmailBlock, d: EmailDesign): string {
 }
 
 /** Table-based, inline-styled HTML that renders the same in Outlook, Gmail and Apple Mail. */
-export function blocksToHtml(blocks: EmailBlock[], design: Partial<EmailDesign> = {}, subject = '', previewText = ''): string {
+export function blocksToHtml(
+  blocks: EmailBlock[],
+  design: Partial<EmailDesign> = {},
+  subject = '',
+  previewText = '',
+): string {
   const d = { ...DEFAULT_DESIGN, ...design };
   const rows = blocks
-    .map((b) => `            <tr><td align="${b.align ?? 'left'}" style="padding:${PADDING_PX[b.padding ?? (b.type === 'spacer' || b.type === 'divider' ? 'sm' : 'md')]};${b.bg ? `background:${b.bg};` : ''}text-align:${b.align ?? 'left'}">${cell(b, d)}</td></tr>`)
+    .map(
+      (b) =>
+        `            <tr><td align="${b.align ?? 'left'}" style="padding:${PADDING_PX[b.padding ?? (b.type === 'spacer' || b.type === 'divider' ? 'sm' : 'md')]};${b.bg ? `background:${b.bg};` : ''}text-align:${b.align ?? 'left'}">${cell(b, d)}</td></tr>`,
+    )
     .join('\n');
   const preheader = previewText
     ? `\n    <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(previewText)}</div>`
@@ -138,13 +174,18 @@ export const htmlToText = (html: string) =>
 export const emailText = (blocks: EmailBlock[]) =>
   blocks
     .filter((b) => ['heading', 'text', 'button', 'footer'].includes(b.type))
-    .map((b) => (b.type === 'button' ? `${b.content}: ${b.href ?? ''}` : b.content))
+    .map((b) =>
+      b.type === 'button' ? `${b.content}: ${b.href ?? ''}` : b.content,
+    )
     .join('\n\n');
 
 /** Plain text (campaign body) → simple HTML paragraphs. */
 export const textToHtml = (text: string, subject = '') =>
   blocksToHtml(
-    text.split(/\n{2,}/).filter((p) => p.trim()).map((p, i) => ({ id: `p${i}`, type: 'text', content: p.trim() })),
+    text
+      .split(/\n{2,}/)
+      .filter((p) => p.trim())
+      .map((p, i) => ({ id: `p${i}`, type: 'text', content: p.trim() })),
     {},
     subject,
   );
@@ -153,7 +194,11 @@ export const textToHtml = (text: string, subject = '') =>
  * Replaces `{{key}}` placeholders. `escape` is on for HTML so contact data cannot
  * inject markup. Unknown keys become empty strings.
  */
-export function personalize(source: string, values: Record<string, string>, escape: boolean): string {
+export function personalize(
+  source: string,
+  values: Record<string, string>,
+  escape: boolean,
+): string {
   return source.replace(/{{\s*([\w.]+)\s*}}/g, (_, key: string) => {
     const v = values[key] ?? '';
     return escape ? escapeHtml(v) : v;
@@ -166,7 +211,12 @@ export function recipientValues(
   extra: Record<string, string> = {},
 ): Record<string, string> {
   const c = contact ?? {};
-  const s = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+  const s = (v: unknown) =>
+    typeof v === 'string'
+      ? v
+      : typeof v === 'number' || typeof v === 'boolean'
+        ? String(v)
+        : '';
   const attributes = (c.attributes ?? {}) as Record<string, unknown>;
   const values: Record<string, string> = {
     first_name: s(c.firstName),

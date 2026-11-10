@@ -9,6 +9,11 @@ import {
 } from '../records/record-store';
 import { RecordsService } from '../records/records.service';
 import {
+  contactCapacity,
+  planName,
+  entitlementsOf,
+} from '../platform/plan-limits';
+import {
   activitiesShape,
   contactDefaults,
   contactsCollection,
@@ -254,16 +259,27 @@ export class CrmService {
         }),
       );
     }
+    // Plan limit: import what fits, skip the rest and say why.
+    const room = await contactCapacity(ctx);
+    const overLimit = Math.max(0, toCreate.length - room);
+    if (overLimit) toCreate.length = room;
     for (let i = 0; i < toCreate.length; i += 1000) {
       await ctx.store.insertMany('contacts', toCreate.slice(i, i + 1000));
     }
+    const { plan, limits } = overLimit
+      ? await entitlementsOf(ctx)
+      : { plan: '', limits: null };
     return ctx.store.insert('contacts/imports', {
       fileName: body.fileName.slice(0, 255),
-      status: 'completed',
+      status: overLimit ? 'partial' : 'completed',
       totalRows: body.rows.length,
       created: toCreate.length,
       updated,
-      skipped,
+      skipped: skipped + overLimit,
+      overLimit,
+      note: overLimit
+        ? `${overLimit.toLocaleString('en')} new contacts were not imported: the ${planName(plan)} plan includes ${limits!.contacts!.toLocaleString('en')} contacts. Upgrade, then import the file again.`
+        : null,
       listId: body.listId ?? null,
     });
   }

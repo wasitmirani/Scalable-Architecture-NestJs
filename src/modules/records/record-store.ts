@@ -142,6 +142,25 @@ export interface StoreChange {
 export class RecordStore {
   /** Writes to watched collections, drained by RecordsService at the end of the unit of work. */
   readonly changes: StoreChange[] = [];
+  /**
+   * Every collection written in this unit of work, with the row ids (null: many or
+   * unknown rows). Published as realtime events after the transaction commits.
+   */
+  readonly touched = new Map<string, Set<string> | null>();
+
+  /** Marks rows as changed for realtime listeners (also for raw SQL updates). */
+  touch(collection: string, id?: string | null) {
+    if (collection.startsWith('_')) return;
+    const ids = this.touched.get(collection);
+    if (ids === null) return;
+    if (!id) {
+      this.touched.set(collection, null);
+      return;
+    }
+    const set = ids ?? new Set<string>();
+    set.add(id);
+    this.touched.set(collection, set.size > 200 ? null : set);
+  }
 
   constructor(
     readonly em: EntityManager,
@@ -149,6 +168,7 @@ export class RecordStore {
   ) {}
 
   private track(collection: string, before: Row | null, after: Row) {
+    this.touch(collection, after.id);
     if (WATCHED_COLLECTIONS.has(collection))
       this.changes.push({ collection, before, after });
   }
@@ -348,6 +368,7 @@ export class RecordStore {
     if (!res) throw new NotFoundException(label(collection));
     const after = toRow(res.row);
     if (res.before) this.track(collection, res.before, after);
+    else this.touch(collection, after.id);
     return after as T;
   }
 
@@ -357,6 +378,7 @@ export class RecordStore {
     if (!res) throw new NotFoundException(label(collection));
     const after = toRow(res.row);
     if (res.before) this.track(collection, res.before, after);
+    else this.touch(collection, after.id);
     return after as T;
   }
 
@@ -368,6 +390,7 @@ export class RecordStore {
       ),
     );
     if (!rows.length) throw new NotFoundException(label(collection));
+    this.touch(collection, id);
   }
 
   async removeMany(collection: string, ids: string[]): Promise<number> {
@@ -379,6 +402,7 @@ export class RecordStore {
         [this.tenantId, collection, ids],
       ),
     );
+    for (const r of rows) this.touch(collection, r.id);
     return rows.length;
   }
 
@@ -388,6 +412,7 @@ export class RecordStore {
       `DELETE FROM product_records WHERE tenant_id = $1 AND collection = $2 AND data @> $3::jsonb`,
       [this.tenantId, collection, JSON.stringify(where)],
     );
+    this.touch(collection);
   }
 }
 

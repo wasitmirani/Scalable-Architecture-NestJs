@@ -17,6 +17,10 @@ export function configureApp(app: INestApplication): void {
       { path: 'hooks/workflows/:token', method: RequestMethod.POST },
       { path: 'unsubscribe/:token', method: RequestMethod.ALL },
       { path: 'oauth/email/:provider/callback', method: RequestMethod.GET },
+      // Provider webhooks: Twilio (inbound, status), Meta (verify, events), Telegram.
+      { path: 'hooks/twilio/:key/:kind', method: RequestMethod.POST },
+      { path: 'hooks/meta/:key', method: RequestMethod.ALL },
+      { path: 'hooks/telegram/:key', method: RequestMethod.POST },
     ],
   });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

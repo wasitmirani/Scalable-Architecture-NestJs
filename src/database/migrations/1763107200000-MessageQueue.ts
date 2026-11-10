@@ -21,6 +21,8 @@ export class MessageQueue1763107200000 implements MigrationInterface {
 
   public async down(q: QueryRunner): Promise<void> {
     await q.query(`DROP INDEX IF EXISTS product_records_message_queue_idx`);
-    await q.query(`DROP INDEX IF EXISTS product_records_scheduled_campaigns_idx`);
+    await q.query(
+      `DROP INDEX IF EXISTS product_records_scheduled_campaigns_idx`,
+    );
   }
 }

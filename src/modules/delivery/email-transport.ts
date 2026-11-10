@@ -49,13 +49,21 @@ function oauthApp(provider: 'gmail' | 'outlook') {
 }
 
 /** Builds a sender for an email channel account. */
-export function emailSender(provider: ProviderKey, c: Credentials): EmailSender {
+export function emailSender(
+  provider: ProviderKey,
+  c: Credentials,
+): EmailSender {
   if (provider === 'ses') {
     const client = new SESv2Client({
       region: c.region,
-      credentials: { accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey },
+      credentials: {
+        accessKeyId: c.accessKeyId,
+        secretAccessKey: c.secretAccessKey,
+      },
     });
-    const transport = createTransport({ SES: { sesClient: client, SendEmailCommand } });
+    const transport = createTransport({
+      SES: { sesClient: client, SendEmailCommand },
+    });
     return {
       fixedFrom: null,
       async verify() {
@@ -66,7 +74,9 @@ export function emailSender(provider: ProviderKey, c: Credentials): EmailSender 
       async send(m) {
         const info = await transport.sendMail({
           ...m,
-          ...(c.configurationSet ? { ses: { ConfigurationSetName: c.configurationSet } } : {}),
+          ...(c.configurationSet
+            ? { ses: { ConfigurationSetName: c.configurationSet } }
+            : {}),
         } as Parameters<Transporter['sendMail']>[0]);
         return { providerMessageId: String(info.messageId ?? '') };
       },
@@ -86,7 +96,9 @@ export function emailSender(provider: ProviderKey, c: Credentials): EmailSender 
       port,
       secure: c.secure ? c.secure === 'true' : port === 465,
       requireTLS: port === 587,
-      auth: c.username ? { user: c.username, pass: c.password ?? '' } : undefined,
+      auth: c.username
+        ? { user: c.username, pass: c.password ?? '' }
+        : undefined,
       ...TIMEOUTS,
     });
   } else if (provider === 'gmail' || provider === 'outlook') {
@@ -95,14 +107,20 @@ export function emailSender(provider: ProviderKey, c: Credentials): EmailSender 
     transport = createTransport({
       ...(provider === 'gmail'
         ? { host: 'smtp.gmail.com', port: 465, secure: true }
-        : { host: 'smtp.office365.com', port: 587, secure: false, requireTLS: true }),
+        : {
+            host: 'smtp.office365.com',
+            port: 587,
+            secure: false,
+            requireTLS: true,
+          }),
       auth: {
         type: 'OAuth2',
         user: c.email,
         clientId: app.clientId,
         clientSecret: app.clientSecret,
         refreshToken: c.refreshToken,
-        accessUrl: provider === 'gmail' ? GOOGLE_TOKEN_URL : MICROSOFT_TOKEN_URL,
+        accessUrl:
+          provider === 'gmail' ? GOOGLE_TOKEN_URL : MICROSOFT_TOKEN_URL,
       },
       ...TIMEOUTS,
     });
@@ -124,16 +142,38 @@ export function emailSender(provider: ProviderKey, c: Credentials): EmailSender 
 }
 
 /** Turns provider and network errors into a short, readable reason. */
-export function describeSendError(error: unknown): { code: string; message: string; permanent: boolean } {
-  const e = error as { code?: string; responseCode?: number; name?: string; message?: string };
-  const message = (e?.message ?? String(error)).replace(/\s+/g, ' ').slice(0, 300);
-  if (e?.responseCode === 535 || /auth|credential|invalid_grant|unauthor/i.test(message))
+export function describeSendError(error: unknown): {
+  code: string;
+  message: string;
+  permanent: boolean;
+} {
+  const e = error as {
+    code?: string;
+    responseCode?: number;
+    name?: string;
+    message?: string;
+  };
+  const message = (e?.message ?? String(error))
+    .replace(/\s+/g, ' ')
+    .slice(0, 300);
+  if (
+    e?.responseCode === 535 ||
+    /auth|credential|invalid_grant|unauthor/i.test(message)
+  )
     return { code: 'AUTH_FAILED', message, permanent: false };
   if (e?.responseCode && e.responseCode >= 550 && e.responseCode < 560)
     return { code: 'REJECTED', message, permanent: true };
-  if (/MessageRejected|not verified|Email address is not verified/i.test(`${e?.name} ${message}`))
+  if (
+    /MessageRejected|not verified|Email address is not verified/i.test(
+      `${e?.name} ${message}`,
+    )
+  )
     return { code: 'SENDER_NOT_VERIFIED', message, permanent: true };
-  if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|timeout|Throttl|rate/i.test(`${e?.code} ${message}`))
+  if (
+    /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|timeout|Throttl|rate/i.test(
+      `${e?.code} ${message}`,
+    )
+  )
     return { code: 'TEMPORARY', message, permanent: false };
   return { code: 'SEND_FAILED', message, permanent: false };
 }

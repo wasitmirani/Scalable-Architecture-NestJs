@@ -10,6 +10,7 @@ import {
   matchesSegment,
   type SegmentRuleGroup,
 } from './segment-engine';
+import { assertContactCapacity } from '../platform/plan-limits';
 
 const asArray = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
@@ -104,6 +105,7 @@ export const contactsCollection: CollectionDef = {
   beforeCreate: async (ctx, input) => {
     const email = normalizeEmail(input.email);
     await assertEmailFree(ctx, email);
+    await assertContactCapacity(ctx, 1);
     return contactDefaults({ ...input, email });
   },
   beforeUpdate: async (ctx, existing, patch) => {

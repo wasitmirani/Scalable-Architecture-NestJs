@@ -56,12 +56,24 @@ export class AutomationScheduler
          AND data->'versions'->-1->'definition'->'trigger'->>'type' = 'date_attribute'`,
     );
     for (const { tenant_id } of tenants) {
-      const tenant = { tenantId: tenant_id, memberId: null, roleKey: null, permissions: new Set<string>() };
+      const tenant = {
+        tenantId: tenant_id,
+        memberId: null,
+        roleKey: null,
+        permissions: new Set<string>(),
+      };
       try {
-        const n = await this.records.run(tenant, 'Scheduler', (ctx) => this.automation.dateTriggers(ctx));
-        if (n) this.logger.log(`Date triggers enrolled ${n} contact(s) in workspace ${tenant_id}`);
+        const n = await this.records.run(tenant, 'Scheduler', (ctx) =>
+          this.automation.dateTriggers(ctx),
+        );
+        if (n)
+          this.logger.log(
+            `Date triggers enrolled ${n} contact(s) in workspace ${tenant_id}`,
+          );
       } catch (error) {
-        this.logger.error(`Date triggers failed for workspace ${tenant_id}: ${(error as Error).message}`);
+        this.logger.error(
+          `Date triggers failed for workspace ${tenant_id}: ${(error as Error).message}`,
+        );
       }
     }
   }

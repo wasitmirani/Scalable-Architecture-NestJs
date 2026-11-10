@@ -55,7 +55,7 @@ export const templatesCollection: CollectionDef = {
   write: 'templates.manage',
   searchFields: ['name', 'subject', 'body'],
   defaultSort: 'updatedAt',
-  serverFields: ['rejectionReason'],
+  serverFields: ['rejectionReason', 'metaName', 'metaId'],
   beforeCreate: (_ctx, input) => {
     if (typeof input.name !== 'string' || !input.name.trim()) {
       throw fieldError(422, 'REQUIRED', 'name', 'Name is required');

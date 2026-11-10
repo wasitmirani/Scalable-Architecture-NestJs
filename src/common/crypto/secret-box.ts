@@ -1,4 +1,9 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from 'crypto';
 import { Logger } from '@nestjs/common';
 
 /**
@@ -22,7 +27,9 @@ function key(): Buffer {
     return cached;
   }
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('SECRETS_ENCRYPTION_KEY must be set (32+ characters) in production');
+    throw new Error(
+      'SECRETS_ENCRYPTION_KEY must be set (32+ characters) in production',
+    );
   }
   new Logger('SecretBox').warn(
     'SECRETS_ENCRYPTION_KEY is not set; using a development key derived from JWT_SECRET.',
@@ -39,15 +46,23 @@ const b64 = (b: Buffer) => b.toString('base64url');
 export function seal(value: unknown): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key(), iv);
-  const body = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
+  const body = Buffer.concat([
+    cipher.update(JSON.stringify(value), 'utf8'),
+    cipher.final(),
+  ]);
   return [VERSION, b64(iv), b64(cipher.getAuthTag()), b64(body)].join(':');
 }
 
 /** Decrypts a value from `seal`. Throws if it was tampered with or the key changed. */
 export function open<T = unknown>(sealed: string): T {
   const [version, iv, tag, body] = sealed.split(':');
-  if (version !== VERSION || !iv || !tag || !body) throw new Error('Unreadable secret');
-  const decipher = createDecipheriv('aes-256-gcm', key(), Buffer.from(iv, 'base64url'));
+  if (version !== VERSION || !iv || !tag || !body)
+    throw new Error('Unreadable secret');
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    key(),
+    Buffer.from(iv, 'base64url'),
+  );
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   const text = Buffer.concat([
     decipher.update(Buffer.from(body, 'base64url')),

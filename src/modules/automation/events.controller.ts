@@ -13,6 +13,7 @@ import { RecordsService } from '../records/records.service';
 import { AutomationService } from './automation.service';
 import type { Contact } from './engine/engine';
 import { flattenPayload } from './engine/workflow';
+import { assertContactCapacity } from '../platform/plan-limits';
 
 const EVENT_NAME = /^[a-z][a-z0-9_.-]{1,63}$/;
 const MAX_PROPERTIES_BYTES = 64 * 1024;
@@ -57,7 +58,9 @@ export class EventsController {
     }
     const who = body.contact ?? {};
     const by = ['id', 'email', 'phone'].find(
-      (k) => typeof who[k as keyof typeof who] === 'string' && String(who[k as keyof typeof who]).trim(),
+      (k) =>
+        typeof who[k as keyof typeof who] === 'string' &&
+        String(who[k as keyof typeof who]).trim(),
     ) as 'id' | 'email' | 'phone' | undefined;
     if (!by) {
       throw fieldError(
@@ -74,56 +77,90 @@ export class EventsController {
         ? {}
         : body.properties;
     if (typeof properties !== 'object' || Array.isArray(properties)) {
-      throw fieldError(422, 'INVALID_PROPERTIES', 'properties', 'properties must be a JSON object');
+      throw fieldError(
+        422,
+        'INVALID_PROPERTIES',
+        'properties',
+        'properties must be a JSON object',
+      );
     }
     const payload = JSON.stringify(properties);
     if (Buffer.byteLength(payload) > MAX_PROPERTIES_BYTES) {
-      throw fieldError(422, 'PROPERTIES_TOO_LARGE', 'properties', 'properties are limited to 64 KB');
+      throw fieldError(
+        422,
+        'PROPERTIES_TOO_LARGE',
+        'properties',
+        'properties are limited to 64 KB',
+      );
     }
     const occurredAt =
-      typeof body.occurredAt === 'string' && !Number.isNaN(Date.parse(body.occurredAt))
+      typeof body.occurredAt === 'string' &&
+      !Number.isNaN(Date.parse(body.occurredAt))
         ? new Date(body.occurredAt).toISOString()
         : new Date().toISOString();
 
-    const result = await this.records.exec(t, p, 'events.write', async (ctx) => {
-      let contact = await this.automation.findContact(ctx, by, identifier);
-      let created = false;
-      if (!contact) {
-        if (by === 'id') {
-          throw fieldError(422, 'CONTACT_NOT_FOUND', 'contact.id', 'No contact has this id');
+    const result = await this.records.exec(
+      t,
+      p,
+      'events.write',
+      async (ctx) => {
+        let contact = await this.automation.findContact(ctx, by, identifier);
+        let created = false;
+        if (!contact) {
+          if (by === 'id') {
+            throw fieldError(
+              422,
+              'CONTACT_NOT_FOUND',
+              'contact.id',
+              'No contact has this id',
+            );
+          }
+          await assertContactCapacity(ctx, 1);
+          contact = await ctx.store.insert<Row & Contact>(
+            'contacts',
+            contactDefaults({
+              [by]: by === 'email' ? identifier.toLowerCase() : identifier,
+              source: 'api',
+            }),
+          );
+          created = true;
         }
-        contact = await ctx.store.insert<Row & Contact>(
-          'contacts',
-          contactDefaults({ [by]: by === 'email' ? identifier.toLowerCase() : identifier, source: 'api' }),
-        );
-        created = true;
-      }
-      await ctx.store.patch('contacts', contact.id, { lastActivityAt: occurredAt });
-      await ctx.store.insert('activities', {
-        contactId: contact.id,
-        type: 'event',
-        channel: null,
-        title: `Event: ${event}`,
-        description: payload === '{}' ? '' : payload.slice(0, 500),
-        authorName: ctx.actorName,
-        at: occurredAt,
-      });
-      const values: Record<string, string> = {
-        event,
-        occurred_at: occurredAt,
-        payload,
-        ...Object.fromEntries(
-          flattenPayload(properties as Record<string, unknown>).map(([k, v]) => [`properties.${k}`, v]),
-        ),
-      };
-      const dispatched = await this.automation.fire(ctx, {
-        type: 'webhook',
-        contactId: contact.id,
-        key: event,
-        values,
-      });
-      return { event, contactId: contact.id, contactCreated: created, ...dispatched };
-    });
+        await ctx.store.patch('contacts', contact.id, {
+          lastActivityAt: occurredAt,
+        });
+        await ctx.store.insert('activities', {
+          contactId: contact.id,
+          type: 'event',
+          channel: null,
+          title: `Event: ${event}`,
+          description: payload === '{}' ? '' : payload.slice(0, 500),
+          authorName: ctx.actorName,
+          at: occurredAt,
+        });
+        const values: Record<string, string> = {
+          event,
+          occurred_at: occurredAt,
+          payload,
+          ...Object.fromEntries(
+            flattenPayload(properties as Record<string, unknown>).map(
+              ([k, v]) => [`properties.${k}`, v],
+            ),
+          ),
+        };
+        const dispatched = await this.automation.fire(ctx, {
+          type: 'webhook',
+          contactId: contact.id,
+          key: event,
+          values,
+        });
+        return {
+          event,
+          contactId: contact.id,
+          contactCreated: created,
+          ...dispatched,
+        };
+      },
+    );
     return ApiResponse.success(result, 'Event accepted', 202);
   }
 }

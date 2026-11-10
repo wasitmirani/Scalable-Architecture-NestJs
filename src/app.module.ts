@@ -19,6 +19,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MailModule } from './modules/mail/mail.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { UsersModule } from './modules/users/users.module';
+import { ProductModule } from './modules/records/product.module';
 
 @Module({
   imports: [
@@ -37,6 +38,8 @@ import { UsersModule } from './modules/users/users.module';
     ApiKeysModule,
     UsersModule,
     AuthModule,
+    // Last: its catch-all resource routes must not shadow the modules above.
+    ProductModule,
   ],
   controllers: [AppController],
   providers: [

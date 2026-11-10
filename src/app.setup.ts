@@ -1,5 +1,6 @@
 import {
   INestApplication,
+  RequestMethod,
   ValidationPipe,
   VersioningType,
 } from '@nestjs/common';
@@ -9,7 +10,10 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 
 /** HTTP configuration shared by main.ts and the e2e tests. */
 export function configureApp(app: INestApplication): void {
-  app.setGlobalPrefix(process.env.API_PREFIX || 'api');
+  // Public workflow webhooks live at `/hooks/workflows/:token`, outside the API prefix.
+  app.setGlobalPrefix(process.env.API_PREFIX || 'api', {
+    exclude: [{ path: 'hooks/workflows/:token', method: RequestMethod.POST }],
+  });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   app.useGlobalPipes(

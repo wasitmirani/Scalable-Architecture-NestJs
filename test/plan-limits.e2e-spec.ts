@@ -198,4 +198,35 @@ describe('Plan limits (e2e)', () => {
     const res = await post(small, `/campaigns/${normal.id}/launch`).expect(403);
     expect(res.body.message).toMatch(/0 left this month/);
   });
+  describe('workspaces per person', () => {
+    const createWs = (a: TestAccount, name: string) =>
+      api().post('/api/v1/tenants').set(bearer(a.accessToken)).send({ name });
+    const switchTo = (a: TestAccount, tenantId: string): TestAccount => ({ ...a, tenantId });
+
+    it('one Free workspace per person; upgrading it allows another', async () => {
+      const u = await registerAccount(app, 'wsfree', { plan: 'free' });
+      const refused = await createWs(u, 'Second').expect(403);
+      expect(refused.body.code).toBe('WORKSPACE_LIMIT');
+      expect(refused.body.message).toMatch(/Upgrade it to a paid plan/);
+
+      await post(u, '/billing/subscription', { planId: 'starter', cycle: 'monthly' }).expect((r) => expect(r.status).toBeLessThan(300));
+      const second = (await createWs(u, 'Second').expect(201)).body.data;
+      await createWs(u, 'Third').expect(403); // the new one is Free
+
+      // Loophole: moving the first back to Free while owning another Free one.
+      const back = await post(u, '/billing/subscription', { planId: 'free', cycle: 'monthly' }).expect(403);
+      expect(back.body.code).toBe('WORKSPACE_LIMIT');
+      void switchTo(u, second.id);
+    });
+
+    it('joining by invitation does not count', async () => {
+      const owner = await registerAccount(app, 'wsowner');
+      const guest = await registerAccount(app, 'wsguest', { plan: 'free' });
+      // The guest owns one Free workspace and may still be invited elsewhere.
+      const roles = (await api().get('/api/v1/roles').set(h(owner)).expect(200)).body.data;
+      const viewer = roles.find((r: { key: string }) => r.key === 'viewer');
+      const res = await api().post('/api/v1/invitations').set(h(owner)).send({ email: guest.email, roleId: viewer.id });
+      expect(res.status).toBeLessThan(300);
+    });
+  });
 });

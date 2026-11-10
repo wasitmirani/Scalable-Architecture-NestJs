@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { assertCanBecomeFree } from '../tenants/workspace-limits';
 import type { HookContext } from '../records/collection.types';
 import {
   fieldError,
@@ -82,6 +84,8 @@ function nextRenewal(from = new Date()) {
 
 @Injectable()
 export class PlatformService {
+  constructor(private readonly dataSource: DataSource) {}
+
   // ---------- Webhooks ----------
 
   async deliveries(ctx: HookContext, endpointId?: string) {
@@ -262,6 +266,8 @@ export class PlatformService {
     const row = await this.subscriptionRow(ctx);
     // A downgrade must fit what the workspace already uses (contacts, seats, live automations).
     await assertFitsPlan(ctx, plan.id as PlanId);
+    // Owner-connection read across workspaces: the per-person Free workspace limit.
+    if (plan.id === 'free') await assertCanBecomeFree(this.dataSource, ctx.store.tenantId);
     await ctx.store.patch('billing/subscription', row.id, {
       planId: plan.id as PlanId,
       cycle,

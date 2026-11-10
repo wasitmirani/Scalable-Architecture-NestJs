@@ -25,6 +25,7 @@ import {
 import { Tenant } from './entities/tenant.entity';
 import { TenantMember } from './entities/tenant-member.entity';
 import { TenantSettings } from './entities/tenant-settings.entity';
+import { assertCanCreateWorkspace } from './workspace-limits';
 
 export interface Membership {
   memberId: string;
@@ -131,6 +132,9 @@ export class TenantsService {
     meta: RequestMeta,
   ) {
     return this.dataSource.transaction(async (em) => {
+      // Lock the user so two simultaneous requests cannot both pass the limit check.
+      await em.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [actor.userId]);
+      await assertCanCreateWorkspace(em, actor.userId);
       const tenant = await this.createWithOwner(em, actor.userId, name);
       await this.audit.record(
         {
